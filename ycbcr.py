@@ -1,37 +1,52 @@
 #!/usr/bin/env python
-# -*- coding: UTF-8 -*-
 
 """
-Tool-set to work with raw video in YCbCr format.
-
-For description of the supported formats, see
-
-    http://www.fourcc.org/yuv.php
-
-YUV video sequences can be downloaded from
-
-    http://trace.eas.asu.edu/yuv/
+Tools for working with YCbCr data.
 """
 
 import argparse
-import binascii
 import array
+import time
+import math
 import sys
 import os
 
+#import cProfile
+
 #-------------------------------------------------------------------------------
 class YCbCr:
+    """
+    Tools to work with raw video in YCbCr format.
+
+    For description of the supported formats, see
+
+        http://www.fourcc.org/yuv.php
+
+    YUV video sequences can be downloaded from
+
+        http://trace.eas.asu.edu/yuv/
+
+    Supports the following YCbCr-formats:
+
+        {IYUV, UYVY, YV12, YVYU}
+
+    Main reason for this is that those are the formats supported by
+
+        http://www.libsdl.org/
+        http://www.libsdl.org/docs/html/sdloverlay.html
+    """
     def __init__(self, width=0, height=0, filename=None, yuv_format_in=None,
-            yuv_format_out=None, filename_out=None, filename_diff=None, func=None):
+            yuv_format_out=None, filename_out=None, filename_diff=None,
+            func=None):
         #TODO: fix
         self.sampling = {
                 'IYUV':1.5,
                 'UYVY':2,
                 'YV12':1.5,
-                'YVYU':2
+                'YVYU':2,
+                '422' :2,
                 }
 
-        self.supported_formats = ['IYUV', 'UYVY', 'YV12', 'YVYU']
         self.filename = filename
         self.filename_out = filename_out
         self.filename_diff = filename_diff
@@ -47,33 +62,29 @@ class YCbCr:
                     self.sampling[self.yuv_format_out])
         else:
             self.frame_size_out = None
-        self.num_frames =self.file_size_in_bytes / self.frame_size_in
 
-        if yuv_format_out:
-            self.zero = [0 for i in xrange(self.frame_size_out)]
-
-        # Store each plane as a separate buffer
-        self.y = []
-        self.cb = []
-        self.cr = []
+        self.num_frames = self.file_size_in_bytes / self.frame_size_in
 
         self.reader = {
-            'YV12': self._read_YV12,
-            'IYUV': self._read_IYUV,
-            'UYVY': self._read_UYVY,
-            'YVYU': self._read_YVYU,
+            'YV12': self._read_yv12,
+            'IYUV': self._read_iyuv,
+            'UYVY': self._read_uyvy,
+            'YVYU': self._read_yvyu,
         }
 
         self.writer = {
-            'YV12': self._write_YV12,
-            'IYUV': self._write_IYUV,
-            'UYVY': self._write_UYVY,
-            'YVYU': self._write_YVYU,
+            'YV12': self._write_yv12,
+            'IYUV': self._write_iyuv,
+            'UYVY': self._write_uyvy,
+            'YVYU': self._write_yvyu,
+            '422' : self._write_422,
         }
+
+        self._check()
 #-------------------------------------------------------------------------------
     def show(self):
         """
-        show stuff
+        Display basic info.
         """
         print
         print "Filename (in):", self.filename
@@ -90,13 +101,15 @@ class YCbCr:
 #-------------------------------------------------------------------------------
     def convert(self):
         """
-        Main-loop for yuv-format-conversion
+        Format-conversion between the supported formats.
+        4:2:0 to 4:2:2 interpolation and 4:2:2 to 4:2:0
+        subsampling when necessary.
         """
         with open(self.filename, 'rb') as fd_in, open(self.filename_out, 'wb') as fd_out:
             for i in xrange(self.num_frames):
-                # 1. read one frame, read() places the result in self.{y, cb, cr}
+                # 1. read one frame, result in self.{y, cb, cr}
                 self.reader[self.yuv_format_in](fd_in)
-                # 2. write() converts one frame self.{y,cb, cr} to correct format and
+                # 2. converts one frame self.{y,cb, cr} to correct format and
                 #    writes it to file
                 self.writer[self.yuv_format_out](fd_out)
                 sys.stdout.write('.')
@@ -104,154 +117,205 @@ class YCbCr:
 #-------------------------------------------------------------------------------
     def diff(self):
         """
-        Main-loop for difference calculations
+        Produces a YV12 file containing the luma-difference between
+        two files.
         """
-        out = self.filename.split('.')[0] + '_' + self.filename_diff.split('.')[0] + '_diff.yuv'
+        out = self.filename.split('.')[0] + '_' + \
+              self.filename_diff.split('.')[0] + '_diff.yuv'
+
         fd_out = open(out, 'wb')
         with open(self.filename, 'rb') as fd_1, open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
                 self.reader[self.yuv_format_in](fd_1)
-                data1 = self._g3(self.y)
+                data1 = [i for i in self.y]
                 self.reader[self.yuv_format_in](fd_2)
-                data2 = self._g3(self.y)
+                data2 = [i for i in self.y]
 
                 D = []
                 for x, y in zip(data1, data2):
                     D.append(self._clip(0x80-abs(x-y)))
 
-                fd_out.write(self._g1(D))
+                fd_out.write(array.array('B', D).tostring())
 
                 sys.stdout.write('.')
                 sys.stdout.flush()
         fd_out.close()
 #-------------------------------------------------------------------------------
-    def _read_YV12(self, fd):
+    def psnr(self):
         """
-        Read one frame
+        Well, PSNR calculations on a frame-basis between two files.
+
+        http://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
         """
-        self.y = fd.read(self.width * self.height)
-        self.cb = fd.read(self.width * self.height / 4)
-        self.cr = fd.read(self.width * self.height / 4)
+        def psnr(mse):
+            log10 = math.log10
+            if mse == 0:
+                return float("nan")
+            return 10.0*log10(float(256*256)/float(mse))
+
+        def sum_square_err(data1, data2):
+            return sum((a-b)*(a-b) for a, b in zip(data1, data2))
+
+        with open(self.filename, 'rb') as fd_1, open(self.filename_diff, 'rb') as fd_2:
+            for i in xrange(self.num_frames):
+                frame1 = array.array('B')
+                frame2 = array.array('B')
+
+                frame1.fromfile(fd_1, self.frame_size_in)
+                frame2.fromfile(fd_2, self.frame_size_in)
+
+                frame_mse = sum_square_err(frame1, frame2) / float(len(frame1))
+                frame_psnr = psnr(frame_mse)
+
+                print "frame: %-10s %.4f" % (i, frame_psnr)
 #-------------------------------------------------------------------------------
-    def _read_UYVY(self, fd):
+    def _check(self):
+        """
+        Basic consistency checks
+        """
+
+#-------------------------------------------------------------------------------
+    def _read_yv12(self, fd):
         """
         Read one frame
         """
-        raw = fd.read(self.frame_size_in)
+        self.y = array.array('B')
+        self.cb = array.array('B')
+        self.cr = array.array('B')
+
+        self.y.fromfile(fd, self.width * self.height)
+        self.cb.fromfile(fd, self.width * self.height / 4)
+        self.cr.fromfile(fd, self.width * self.height / 4)
+#-------------------------------------------------------------------------------
+    def _read_uyvy(self, fd):
+        """
+        Read one frame
+        """
+        self.y = array.array('B')
+        self.cb = array.array('B')
+        self.cr = array.array('B')
+
+        raw = array.array('B')
+        raw.fromfile(fd, self.frame_size_in)
 
         self.y = raw[1::2]     # y
         self.cb = raw[0::4]    # u
         self.cr = raw[2::4]    # v
 #-------------------------------------------------------------------------------
-    def _read_YVYU(self, fd):
+    def _read_yvyu(self, fd):
         """
         Read one frame
         """
-        raw = fd.read(self.frame_size_in)
+        self.y = array.array('B')
+        self.cb = array.array('B')
+        self.cr = array.array('B')
+
+        raw = array.array('B')
+        raw.fromfile(fd, self.frame_size_in)
 
         # Y0|V0|Y1|U0
         self.y = raw[0::2]     # y
         self.cr = raw[1::4]    # v
         self.cb = raw[3::4]    # u
 #-------------------------------------------------------------------------------
-    def _read_IYUV(self, fd):
+    def _read_iyuv(self, fd):
         """
         read one frame
         IYUV is YV12 where the croma-planes have switched places.
         """
-        self.y = fd.read(self.width * self.height)
-        self.cr = fd.read(self.width * self.height / 4)
-        self.cb = fd.read(self.width * self.height / 4)
+        self.y = array.array('B')
+        self.cb = array.array('B')
+        self.cr = array.array('B')
+
+        self.y.fromfile(fd, self.width * self.height)
+        self.cr.fromfile(fd, self.width * self.height / 4)
+        self.cb.fromfile(fd, self.width * self.height / 4)
 #-------------------------------------------------------------------------------
-    def _write_YVYU(self, fd):
+    def _write_yvyu(self, fd):
         """
         write one frame
         handle re-sampling of frame from 4:2:0 -> 4:2:2
         """
-
         if self.yuv_format_in in ['YV12', 'IYUV']:
-            self.y = self._g3(self.y)
-            self.cb = self._g3(self.cb)
-            self.cr = self._g3(self.cr)
-            cb = [0 for i in xrange(0, ((self.width >> 1) * self.height))]
-            cr = [0 for i in xrange(0, ((self.width >> 1) * self.height))]
+            cb = [0] * (self.width / 2 * self.height)
+            cr = [0] * (self.width / 2 * self.height)
 
             self.cb = self._conv420to422(self.cb, cb)
             self.cr = self._conv420to422(self.cr, cr)
 
-        yvyu = self.zero
+        yvyu = [0] * self.frame_size_out
         yvyu[0::2] = self.y
         yvyu[1::4] = self.cr
         yvyu[3::4] = self.cb
 
-        if self.yuv_format_in in ['YV12', 'IYUV']:
-            fd.write(self._g1(yvyu))
-        else:
-            fd.write("".join(yvyu))
+        fd.write(array.array('B', yvyu).tostring())
 #-------------------------------------------------------------------------------
-    def _write_YV12(self, fd):
+    def _write_yv12(self, fd):
         """
         write one frame
         handle re-sampling of frame from 4:2:2 -> 4:2:0
         """
         if self.yuv_format_in in ['UYVY', 'YVYU']:
-            self.y = self._g3(self.y)
-            self.cb = self._g3(self.cb)
-            self.cr = self._g3(self.cr)
-            cb = [0 for i in xrange(0, ((self.width >> 2) * self.height))]
-            cr = [0 for i in xrange(0, ((self.width >> 2) * self.height))]
+            cb = [0] * (self.width  * self.height / 4)
+            cr = [0] * (self.width  * self.height / 4)
 
             self.cb = self._conv422to420(self.cb, cb)
             self.cr = self._conv422to420(self.cr, cr)
 
-            fd.write(self._g1(self.y) + self._g1(self.cb) + self._g1(self.cr))
-        else:
-            fd.write(self.y + self.cb + self.cr)
-
+        fd.write(array.array('B', self.y).tostring())
+        fd.write(array.array('B', self.cb).tostring())
+        fd.write(array.array('B', self.cr).tostring())
 #-------------------------------------------------------------------------------
-    def _write_UYVY(self, fd):
+    def _write_uyvy(self, fd):
         """
         write one frame
         handle re-sampling of frame from 4:2:0 -> 4:2:2
         """
         if self.yuv_format_in in ['YV12', 'IYUV']:
-            self.y = self._g3(self.y)
-            self.cb = self._g3(self.cb)
-            self.cr = self._g3(self.cr)
-            cb = [0 for i in xrange(0, ((self.width >> 1) * self.height))]
-            cr = [0 for i in xrange(0, ((self.width >> 1) * self.height))]
+            cb = [0] * (self.width / 2 * self.height)
+            cr = [0] * (self.width / 2 * self.height)
 
             self.cb = self._conv420to422(self.cb, cb)
             self.cr = self._conv420to422(self.cr, cr)
 
-        uyvy = self.zero
+        uyvy = [0] * self.frame_size_out
         uyvy[1::2] = self.y
         uyvy[0::4] = self.cb
         uyvy[2::4] = self.cr
 
-        if self.yuv_format_in in ['YV12', 'IYUV']:
-            fd.write(self._g1(uyvy))
-        else:
-            fd.write("".join(uyvy))
+        fd.write(array.array('B', uyvy).tostring())
 #-------------------------------------------------------------------------------
-    def _write_IYUV(self, fd):
+    def _write_iyuv(self, fd):
         """
         write one frame
         handle re-sampling of frame from 4:2:2 -> 4:2:0
         """
         if self.yuv_format_in in ['UYVY', 'YVYU']:
-            self.y = self._g3(self.y)
-            self.cb = self._g3(self.cb)
-            self.cr = self._g3(self.cr)
-            cb = [0 for i in xrange(0, ((self.width >> 2) * self.height))]
-            cr = [0 for i in xxrange(0, ((self.width >> 2) * self.height))]
+            cb = [0] * (self.width * self.height / 4)
+            cr = [0] * (self.width * self.height / 4)
 
             self.cb = self._conv422to420(self.cb, cb)
             self.cr = self._conv422to420(self.cr, cr)
 
-            fd.write(self._g1(self.y) + self._g1(self.cr) + self._g1(self.cb))
-        else:
-            fd.write(self.y + self.cr + self.cb)
+        fd.write(array.array('B', self.y).tostring())
+        fd.write(array.array('B', self.cr).tostring())
+        fd.write(array.array('B', self.cb).tostring())
+#-------------------------------------------------------------------------------
+    def _write_422(self, fd):
+        """
+        write one frame as plane-separated.
+        handle re-sampling of frame from 4:2:0 -> 4:2:2
+        """
+        if self.yuv_format_in in ['YV12', 'IYUV']:
+            cb = [0] * (self.width * self.height / 2)
+            cr = [0] * (self.width * self.height / 2)
+
+            self.cb = self._conv420to422(self.cb, cb)
+            self.cr = self._conv420to422(self.cr, cr)
+
+        fd.write(array.array('B', self.y).tostring())
+        fd.write(array.array('B', self.cb).tostring())
+        fd.write(array.array('B', self.cr).tostring())
 #-------------------------------------------------------------------------------
     def _conv420to422(self, src, dst):
         """
@@ -262,11 +326,9 @@ class YCbCr:
         w = self.width >> 1
         h = self.height >> 1
 
-        n = 0
-        k = 0
         for i in xrange(w):
             for j in xrange(h):
-                j2 = j<<1
+                j2 = j << 1
                 jm3 = 0 if (j<3) else j-3
                 jm2 = 0 if (j<2) else j-2
                 jm1 = 0 if (j<1) else j-1
@@ -274,23 +336,25 @@ class YCbCr:
                 jp2 = j+2 if (j<h-2) else h-1
                 jp3 = j+3 if (j<h-3) else h-1
 
-                a = (3*src[n+w*jm3]
-                   -16*src[n+w*jm2]
-                   +67*src[n+w*jm1]
-                  +227*src[n+w*j]
-                   -32*src[n+w*jp1]
-                    +7*src[n+w*jp2]+128)>>8
-                dst[k+w*j2] = self._clip(a)
+                a = (3*src[i+w*jm3]
+                   -16*src[i+w*jm2]
+                   +67*src[i+w*jm1]
+                  +227*src[i+w*j]
+                   -32*src[i+w*jp1]
+                    +7*src[i+w*jp2]+128)>>8
 
-                b = (3*src[n+w*jp3]
-                   -16*src[n+w*jp2]
-                   +67*src[n+w*jp1]
-                  +227*src[n+w*j]
-                   -32*src[n+w*jm1]
-                   +7*src[n+w*jm2]+128)>>8
-                dst[k+w*(j2+1)] = self._clip(b)
-            n += 1
-            k += 1
+                dst[i+w*j2] = a if a > 0 else 0
+                dst[i+w*j2] = a if a < 255 else 255
+
+                b = (3*src[i+w*jp3]
+                   -16*src[i+w*jp2]
+                   +67*src[i+w*jp1]
+                  +227*src[i+w*j]
+                   -32*src[i+w*jm1]
+                   +7*src[i+w*jm2]+128)>>8
+
+                dst[i+w*(j2+1)] = b if b > 0 else 0
+                dst[i+w*(j2+1)] = b if b < 255 else 255
         return dst
 #-------------------------------------------------------------------------------
     def _conv422to420(self, src, dst):
@@ -302,8 +366,6 @@ class YCbCr:
         w = self.width >> 1
         h = self.height
 
-        n=0
-        k=0
         for i in xrange(w):
             for j in xrange(0, h, 2):
                 jm5 = 0 if (j<5) else j-5
@@ -316,31 +378,33 @@ class YCbCr:
                 jp3 = j+3 if (j<h-3) else h-1
                 jp4 = j+4 if (j<h-4) else h-1
                 jp5 = j+5 if (j<h-5) else h-1
-                jp6 = j+6 if (j<h-6) else h-1
+                jp6 = j+5 if (j<h-5) else h-1 # something strange here
 
                 # FIR filter with 0.5 sample interval phase shift
-                a = ( 228*(src[n+w*j]  +src[n+w*jp1])
-                      +70*(src[n+w*jm1]+src[n+w*jp2])
-                      -37*(src[n+w*jm2]+src[n+w*jp3])
-                      -21*(src[n+w*jm3]+src[n+w*jp4])
-                      +11*(src[n+w*jm4]+src[n+w*jp5])
-                       +5*(src[n+w*jm5]+src[n+w*jp6])+256)>>9
-                dst[k+w*(j>>1)] = self._clip(a)
-            n+=1
-            k+=1
+                a = ( 228*(src[i+w*j]  +src[i+w*jp1])
+                      +70*(src[i+w*jm1]+src[i+w*jp2])
+                      -37*(src[i+w*jm2]+src[i+w*jp3])
+                      -21*(src[i+w*jm3]+src[i+w*jp4])
+                      +11*(src[i+w*jm4]+src[i+w*jp5])
+                      +5*(src[i+w*jm5]+src[i+w*jp6])+256)>>9
+
+                dst[i+w*(j>>1)] = a if a > 0 else 0
+                dst[i+w*(j>>1)] = a if a < 255 else 255
         return dst
 #-------------------------------------------------------------------------------
     def _g3(self, string):
         """
         return a array of int from a string
         """
+        pass
         #return [int(binascii.hexlify(i), 16) for i in string]
-        return array.array('B', string).tolist()
+#        return array.array('B', string).tolist()
         #return map(ord, string)
 #-------------------------------------------------------------------------------
     def _g1(self, my_list):
         """create a string of integer ASCII values from a list of int"""
-        return array.array('B', my_list).tostring()
+        pass
+#        return array.array('B', my_list).tostring()
 #-------------------------------------------------------------------------------
     def _clip(self, data):
         """
@@ -354,17 +418,17 @@ class YCbCr:
 #-------------------------------------------------------------------------------
     def split(self):
         """
-        Split a file into separate frames
+        Split a file into separate frames.
         """
         src_yuv = open(self.filename, 'rb')
 
         filecnt = 0
         while True:
-            buf = src_yuv.read(self.frame_size_in)
-            if buf:
-                s = "frame" + "%s" % filecnt + ".yuv"
-                dst_yuv = open(s, 'wb')
-                dst_yuv.write(buf)           # write read data into new file
+            data = src_yuv.read(self.frame_size_in)
+            if data:
+                fname = "frame" + "%s" % filecnt + ".yuv"
+                dst_yuv = open(fname, 'wb')
+                dst_yuv.write(data)           # write read data into new file
                 print "writing frame", filecnt
                 dst_yuv.close()
                 filecnt += 1
@@ -372,58 +436,30 @@ class YCbCr:
                 break
         src_yuv.close()
 #-------------------------------------------------------------------------------
-def my_test():
-    """Add a test-suite here"""
-#    x = YCbCr(width=352, height=288, filename='foreman_352x288.yuv', yuv_format_in='YV12')
-#    x.show()
-#    y = YCbCr(width=1600, height=1200, filename='image0.ycbcr', yuv_format_in='UYVY')
-#    y.show()
-#    a = YCbCr(width=352, height=288, filename='foreman_352x288.yuv', yuv_format_in='YV12',
-#            yuv_format_out='UYVY', filename_out='out_UYVY.yuv')
-#    a.show()
-#    a.convert()
-#
-#    b = YCbCr(width=352, height=288, filename='foreman_352x288.yuv', yuv_format_in='YV12',
-#            yuv_format_out='IYUV', filename_out='out_IYUV.yuv')
-#    b.show()
-#    b.convert()
 
-    c = YCbCr(width=352, height=288, filename='foreman_352x288.yuv', yuv_format_in='YV12',
-            yuv_format_out='YVYU', filename_out='out_YVYU.yuv')
-    c.show()
-    c.convert()
-#    q = YCbCr(width=1600, height=1200, filename='image0.ycbcr', yuv_format_in='UYVY',
-#            yuv_format_out='IYUV', filename_out='out.yuv')
-#    q.show()
-#    q.convert()
-#    d = YCbCr(width=352, height=288, filename='foreman_352x288.yuv', yuv_format_in='YV12',
-#            yuv_format_out='YV12', filename_out='out_YV12.yuv')
-#    d.show()
-#    d.convert()
-#    e = YCbCr(width=352, height=288, filename='out_UYVY.yuv', yuv_format_in='UYVY',
-#            yuv_format_out='UYVY', filename_out='slask.yuv')
-#    e.show()
-#    e.convert()
-#-------------------------------------------------------------------------------
+# Helper functions
 
-# helper functions
-def cmd_info(args):
+def _cmd_info(args):
     YCbCr(**vars(args)).show()
 
-def cmd_split(args):
+def _cmd_split(args):
     Y = YCbCr(**vars(args))
     Y.show()
     Y.split()
 
-def cmd_convert(args):
+def _cmd_convert(args):
     Y = YCbCr(**vars(args))
     Y.show()
     Y.convert()
 
-def cmd_diff(args):
+def _cmd_diff(args):
     Y = YCbCr(**vars(args))
     Y.show()
     Y.diff()
+
+def _cmd_psnr(args):
+    Y = YCbCr(**vars(args))
+    Y.psnr()
 
 if __name__ == '__main__':
     # create the top-level parser
@@ -438,37 +474,50 @@ if __name__ == '__main__':
     parent_parser.add_argument('width', type=int)
     parent_parser.add_argument('height', type=int)
     parent_parser.add_argument('yuv_format_in', type=str,
-            choices=['IYUV', 'UYVY', 'YV12', 'YVYU'], help='valid input-formats')
+            choices=['IYUV', 'UYVY', 'YV12', 'YVYU'],
+            help='valid input-formats')
 
     # create parser for the 'info' command
-    parser_info = subparsers.add_parser('info', help='Basic info about YCbCr file',
+    parser_info = subparsers.add_parser('info',
+            help='Basic info about YCbCr file',
             parents=[parent_parser])
-    parser_info.set_defaults(func=cmd_info)
+    parser_info.set_defaults(func=_cmd_info)
 
-    # create parser for the "split" command
+    # create parser for the 'split' command
     parser_split = subparsers.add_parser('split',
             help='Split a YCbCr file into individual frames',
             parents=[parent_parser])
-    parser_split.set_defaults(func=cmd_split)
+    parser_split.set_defaults(func=_cmd_split)
 
-    # create parser for the "convert" command
+    # create parser for the 'convert' command
     parser_convert = subparsers.add_parser('convert',
             help='YCbCr format conversion',
             parents=[parent_parser])
     parser_convert.add_argument('yuv_format_out', type=str,
-            choices=['IYUV', 'UYVY', 'YV12', 'YVYU'],
+            choices=['IYUV', 'UYVY', 'YV12', 'YVYU', '422'],
             help='valid output-formats')
-    parser_convert.add_argument('filename_out', type=str, help='file to write to')
-    parser_convert.set_defaults(func=cmd_convert)
+    parser_convert.add_argument('filename_out', type=str,
+            help='file to write to')
+    parser_convert.set_defaults(func=_cmd_convert)
 
-    # create parser for the "diff" command
+    # create parser for the 'diff' command
     parser_diff = subparsers.add_parser('diff',
             help='Create diff between two YCbCr files',
             parents=[parent_parser])
     parser_diff.add_argument('filename_diff', type=str, help='filename')
-    parser_diff.set_defaults(func=cmd_diff)
+    parser_diff.set_defaults(func=_cmd_diff)
 
-    #let parse_args() do the job of calling the appropriate function
+    # create parser for the 'psnr' command
+    parser_psnr = subparsers.add_parser('psnr',
+            help='Calculate PSNR for each frame and color-plane',
+            parents=[parent_parser])
+    parser_psnr.add_argument('filename_diff', type=str, help='filename')
+    parser_psnr.set_defaults(func=_cmd_psnr)
+
+    # let parse_args() do the job of calling the appropriate function
     # after argument parsing is complete
     args = parser.parse_args()
+    t1 = time.clock()
     args.func(args)
+    t2 = time.clock()
+    print "\nTime: ", round(t2-t1, 4)
