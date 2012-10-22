@@ -21,7 +21,7 @@ class TestYCbCrFunctions(unittest.TestCase):
     def setUp(self):
         pass
 
-    def test_a(self):
+    def test_1(self):
         """
         convert YV12 into itself
         """
@@ -34,7 +34,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, 'c9120ccf583b410b75379c48325dd50ec8d16ce8')
 
-    def test_b(self):
+    def test_2(self):
         """
         YV12 -> UYVY
         """
@@ -47,7 +47,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, 'f50fc0500b217256a87c7cd1e867da0c49c51ace')
 
-    def test_c(self):
+    def test_3(self):
         """
         YV12 -> YVYU
         """
@@ -60,7 +60,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, '68ac533290a89625b910731c93fbecba89b61870')
 
-    def test_d(self):
+    def test_4(self):
         """
         YV12 -> UVYU -> YV12
         """
@@ -78,7 +78,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, 'b8934d77e0d71e77e90b4ba777a0cb978679d8ec')
 
-    def test_e(self):
+    def test_5(self):
         """
         YV12 -> 422
         """
@@ -91,7 +91,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, 'c700a31a209df30b72c1097898740d4c42d63a42')
 
-    def test_f(self):
+    def test_6(self):
         """
         diff
         """
@@ -104,7 +104,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, '6b508de1971eaae965d3a3cf0c8715c6fe907aff')
 
-    def test_g(self):
+    def test_7(self):
         """
         split
         """
@@ -116,7 +116,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, 'c9120ccf583b410b75379c48325dd50ec8d16ce8')
 
-    def test_h(self):
+    def test_8(self):
         """
         psnr
         """

@@ -55,8 +55,8 @@ class YCbCr:
 
         self.layout = None
 
-        self.__check()
         self.__calc()
+        self.__check()
 #-------------------------------------------------------------------------------
     def show(self):
         """
@@ -168,12 +168,39 @@ class YCbCr:
 
         return value_frames
 #-------------------------------------------------------------------------------
+    def get_luma(self, alt_fname=False):
+        """
+        Generator to get luminance-data for all frames
+        """
+        if alt_fname:
+            fname = alt_fname
+        else:
+            fname = self.filename
+
+        with open(fname, 'rb') as fd_in:
+            for i in xrange(self.num_frames):
+                self.__read_frame(fd_in)
+                yield self.y
+#-------------------------------------------------------------------------------
     def __check(self):
         """
-        Basic consistency checks
-        TODO: add...
+        Basic consistency checks to prevent fumbly-fingers
+        - width & height even multiples of 16
+        - number of frames divides file-size evenly
+        - for diff-cmd, file-sizes match
         """
-        pass
+        if self.width & 0xF != 0:
+            print >> sys.stderr, "[WARNING] - width not divisable by 16"
+        if self.height & 0xF != 0:
+            print >> sys.stderr, "[WARNING] - hight not divisable by 16"
+
+        size = os.path.getsize(self.filename)
+        if not self.num_frames == size / float(self.frame_size_in):
+            print >> sys.stderr, "[WARNING] - # frames not integer"
+
+        if self.filename_diff:
+            if not os.path.getsize(self.filename) == os.path.getsize(self.filename_diff):
+                print >> sys.stderr, "[WARNING] - file-sizes are not equal"
 #-------------------------------------------------------------------------------
     def __calc(self):
         """
@@ -446,6 +473,10 @@ def __cmd_psnr(arg):
     yuv = YCbCr(**vars(arg))
     yuv.psnr()
 
+def __cmd_get_luma(arg):
+    yuv = YCbCr(**vars(arg))
+    return yuv.get_luma()
+
 if __name__ == '__main__':
     # create the top-level parser
     parser = argparse.ArgumentParser(description='YCbCr tools',
@@ -459,7 +490,7 @@ if __name__ == '__main__':
     parent_parser.add_argument('width', type=int)
     parent_parser.add_argument('height', type=int)
     parent_parser.add_argument('yuv_format_in', type=str,
-            choices=['IYUV', 'UYVY', 'YV12', 'YVYU'],
+            choices=['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2'],
             help='valid input-formats')
 
     # create parser for the 'info' command
@@ -479,7 +510,7 @@ if __name__ == '__main__':
             help='YCbCr format conversion',
             parents=[parent_parser])
     parser_convert.add_argument('yuv_format_out', type=str,
-            choices=['IYUV', 'UYVY', 'YV12', 'YVYU', '422'],
+            choices=['IYUV', 'UYVY', 'YV12', 'YVYU', '422', 'YUY2'],
             help='valid output-formats')
     parser_convert.add_argument('filename_out', type=str,
             help='file to write to')
@@ -498,6 +529,12 @@ if __name__ == '__main__':
             parents=[parent_parser])
     parser_psnr.add_argument('filename_diff', type=str, help='filename')
     parser_psnr.set_defaults(func=__cmd_psnr)
+
+    # create parser for the 'get_luma' command
+    parser_info = subparsers.add_parser('get_luma',
+            help='Return luminance-data for each frame. Generator',
+            parents=[parent_parser])
+    parser_info.set_defaults(func=__cmd_get_luma)
 
     # let parse_args() do the job of calling the appropriate function
     # after argument parsing is complete

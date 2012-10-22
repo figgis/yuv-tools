@@ -1,9 +1,10 @@
-YCbCr
-=====
+YCbCr (YUV)
+===========
 
 Tools for various operations on raw YCbCr video files.
+http://en.wikipedia.org/wiki/YCbCr
 
-Supported formats:
+ycbcr.py - is the main class that supports the following formats:
 
 * IYUV
 * UYVY
@@ -19,6 +20,8 @@ Supported operations:
 * split a file into individual frames
 * creates a diff between two files
 * PSNR calculations
+* get luma-data per frame
+
 
 Usage
 -----
@@ -28,3 +31,11 @@ Usage
 	$ ./ycbcr.py diff --help
 	$ ./ycbcr.py split --help
 	$ ./ycbcr.py psnr --help
+	$ ./plot_diff.py foreman_cif_frame_0.yuv foreman_cif_frame_1.yuv 352 288 YV12
+
+Files
+-----
+
+* ycbcr.py - main class
+* plot_diff.py - matplotlib wrapper around PSNR-calculation. Generate nice plots using luma-data.
+* verify.py - unittest
