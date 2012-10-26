@@ -11,6 +11,9 @@ import math
 import sys
 import os
 
+class Format(Exception):
+    pass
+
 #-------------------------------------------------------------------------------
 class YCbCr:
     """
@@ -36,6 +39,11 @@ class YCbCr:
     def __init__(self, width=0, height=0, filename=None, yuv_format_in=None,
             yuv_format_out=None, filename_out=None, filename_diff=None,
             func=None):
+
+        if yuv_format_in not in ['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2']:
+            raise NameError('format not supported! "%s"' % yuv_format_in)
+        if yuv_format_out not in ['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2', '422', None]:
+            raise NameError('format not supported! "%s"' % yuv_format_out)
 
         self.filename = filename
         self.filename_out = filename_out
@@ -97,7 +105,6 @@ class YCbCr:
         Produces a YV12 file containing the luma-difference between
         two files.
         """
-
         def clip(data):
             """
             clip function
@@ -149,24 +156,120 @@ class YCbCr:
         def sum_square_err(data1, data2):
             return sum((a-b)*(a-b) for a, b in zip(data1, data2))
 
-        value_frames = []
+        with open(self.filename, 'rb') as fd_1, \
+             open(self.filename_diff, 'rb') as fd_2:
+            for i in xrange(self.num_frames):
+                self.__read_frame(fd_1)
+                y1 = list(self.y)
+                cb1 = list(self.cb)
+                cr1 = list(self.cr)
+                self.__read_frame(fd_2)
+                y2 = list(self.y)
+                cb2 = list(self.cb)
+                cr2 = list(self.cr)
+
+                frame1 = [y1, cb1, cr1]
+                frame2 = [y2, cb2, cr2]
+
+                mse = [sum_square_err(x, y) / float(len(x)) for x, y in zip(frame1, frame2)]
+                yield [psnr(i) for i in mse]
+#-------------------------------------------------------------------------------
+    def ssim(self):
+        """
+        http://en.wikipedia.org/wiki/Structural_similarity
+
+        implementation using scipy and numpy from
+        http://isit.u-clermont1.fr/~anvacava/code.html
+        """
+        import numpy
+        import scipy.ndimage
+        from numpy.ma.core import exp
+        from scipy.constants.constants import pi
+
+        def compute_ssim(img_mat_1, img_mat_2):
+            #Variables for Gaussian kernel definition
+            gaussian_kernel_sigma=1.5
+            gaussian_kernel_width=11
+            gaussian_kernel=numpy.zeros((gaussian_kernel_width,gaussian_kernel_width))
+
+            #Fill Gaussian kernel
+            for i in range(gaussian_kernel_width):
+                for j in range(gaussian_kernel_width):
+                    gaussian_kernel[i,j]=\
+                    (1/(2*pi*(gaussian_kernel_sigma**2)))*\
+                    exp(-(((i-5)**2)+((j-5)**2))/(2*(gaussian_kernel_sigma**2)))
+
+            #Convert image matrices to double precision (like in the Matlab version)
+            img_mat_1=img_mat_1.astype(numpy.float)
+            img_mat_2=img_mat_2.astype(numpy.float)
+
+            #Squares of input matrices
+            img_mat_1_sq=img_mat_1**2
+            img_mat_2_sq=img_mat_2**2
+            img_mat_12=img_mat_1*img_mat_2
+
+            #Means obtained by Gaussian filtering of inputs
+            img_mat_mu_1=scipy.ndimage.filters.convolve(img_mat_1,gaussian_kernel)
+            img_mat_mu_2=scipy.ndimage.filters.convolve(img_mat_2,gaussian_kernel)
+
+            #Squares of means
+            img_mat_mu_1_sq=img_mat_mu_1**2
+            img_mat_mu_2_sq=img_mat_mu_2**2
+            img_mat_mu_12=img_mat_mu_1*img_mat_mu_2
+
+            #Variances obtained by Gaussian filtering of inputs' squares
+            img_mat_sigma_1_sq=scipy.ndimage.filters.convolve(img_mat_1_sq,gaussian_kernel)
+            img_mat_sigma_2_sq=scipy.ndimage.filters.convolve(img_mat_2_sq,gaussian_kernel)
+
+            #Covariance
+            img_mat_sigma_12=scipy.ndimage.filters.convolve(img_mat_12,gaussian_kernel)
+
+            #Centered squares of variances
+            img_mat_sigma_1_sq=img_mat_sigma_1_sq-img_mat_mu_1_sq
+            img_mat_sigma_2_sq=img_mat_sigma_2_sq-img_mat_mu_2_sq
+            img_mat_sigma_12=img_mat_sigma_12-img_mat_mu_12;
+
+            #c1/c2 constants
+            #First use: manual fitting
+            c_1=6.5025
+            c_2=58.5225
+
+            #Second use: change k1,k2 & c1,c2 depend on L (width of color map)
+            l=255
+            k_1=0.01
+            c_1=(k_1*l)**2
+            k_2=0.03
+            c_2=(k_2*l)**2
+
+            #Numerator of SSIM
+            num_ssim=(2*img_mat_mu_12+c_1)*(2*img_mat_sigma_12+c_2)
+            #Denominator of SSIM
+            den_ssim=(img_mat_mu_1_sq+img_mat_mu_2_sq+c_1)*\
+            (img_mat_sigma_1_sq+img_mat_sigma_2_sq+c_2)
+            #SSIM
+            ssim_map=num_ssim/den_ssim
+            index=numpy.average(ssim_map)
+
+            return index
+
+        def l2n(x, w, h):
+            """
+            list 2 numpy, including reshape
+            """
+            n = numpy.array(x, dtype=numpy.uint8)
+            return numpy.reshape(n, (h, w))
+
 
         with open(self.filename, 'rb') as fd_1, \
              open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
-                frame1 = array.array('B')
-                frame2 = array.array('B')
+                self.__read_frame(fd_1)
+                data1 = list(self.y)
+                self.__read_frame(fd_2)
+                data2 = list(self.y)
 
-                frame1.fromfile(fd_1, self.frame_size_in)
-                frame2.fromfile(fd_2, self.frame_size_in)
-
-                frame_mse = sum_square_err(frame1, frame2) / float(len(frame1))
-                frame_psnr = psnr(frame_mse)
-                value_frames.append(frame_psnr)
-
-                print "frame: %-10s %.4f" % (i, frame_psnr)
-
-        return value_frames
+                yield compute_ssim(l2n(data1, self.width, self.height),
+                        l2n(data2, self.width, self.height))
 #-------------------------------------------------------------------------------
     def get_luma(self, alt_fname=False):
         """
@@ -428,24 +531,59 @@ class YCbCr:
                 dst[i+w*(j>>1)] = pel if pel < 255 else 255
         return dst
 #-------------------------------------------------------------------------------
+    def __rgb2ycbcr(self, r, g, b):
+        """
+        (r,g,b) -> (y, cb, cr)
+
+        Conversion to YCbCr color space.
+        CCIR 601 formulas from "Digital Pictures by Natravali and Haskell, page 120.
+        """
+        y  =  _clip2UInt8( 0.257*r + 0.504*g + 0.098*b + 16)
+        cb =  _clip2UInt8(-0.148*r - 0.291*g + 0.439*b + 128)
+        cr =  _clip2UInt8( 0.439*r - 0.368*g - 0.071*b + 128)
+
+        return (y, cb, cr)
+#-------------------------------------------------------------------------------
+    def __ycbcr2rgb(self, y, cb, cr):
+        """
+        (y,cb,cr) -> (r, g, b)
+
+        Conversion to RGB color space.
+        CCIR 601 formulas from "Digital Pictures by Natravali and Haskell, page 120.
+        """
+        y =  y-16
+        cb = cb-128
+        cr = cr-128
+
+        r = _clip2UInt8(1.164*y            + 1.596*cr)
+        g = _clip2UInt8(1.164*y - 0.392*cb - 0.813*cr)
+        b = _clip2UInt8(1.164*y + 2.017*cb           )
+
+        return (r, g, b)
+#-------------------------------------------------------------------------------
+    def _clip2UInt8(self, d):
+        "Clip d to interval 0-255"
+
+        if (d < 0 ):
+            return 0
+
+        if (d > 255):
+            return 255
+
+        return int(round(d))
+#-------------------------------------------------------------------------------
     def split(self):
         """
         Split a file into separate frames.
         """
         src_yuv = open(self.filename, 'rb')
 
-        filecnt = 0
-        while True:
+        for i in xrange(self.num_frames):
             data = src_yuv.read(self.frame_size_in)
-            if data:
-                fname = "frame" + "%s" % filecnt + ".yuv"
-                dst_yuv = open(fname, 'wb')
-                dst_yuv.write(data)           # write read data into new file
-                print "writing frame", filecnt
-                dst_yuv.close()
-                filecnt += 1
-            else:
-                break
+            fname = "frame" + "%d" % i + ".yuv"
+            dst_yuv = open(fname, 'wb')
+            dst_yuv.write(data)           # write read data into new file
+            dst_yuv.close()
         src_yuv.close()
 #-------------------------------------------------------------------------------
 
@@ -471,7 +609,13 @@ def __cmd_diff(arg):
 
 def __cmd_psnr(arg):
     yuv = YCbCr(**vars(arg))
-    yuv.psnr()
+    for i, n in enumerate(yuv.psnr()):
+        print i, n
+
+def __cmd_ssim(arg):
+    yuv = YCbCr(**vars(arg))
+    for i, n in enumerate(yuv.ssim()):
+        print i, n
 
 def __cmd_get_luma(arg):
     yuv = YCbCr(**vars(arg))
@@ -525,10 +669,17 @@ if __name__ == '__main__':
 
     # create parser for the 'psnr' command
     parser_psnr = subparsers.add_parser('psnr',
-            help='Calculate PSNR for each frame and color-plane',
+            help='Calculate PSNR for each frame, luma data only',
             parents=[parent_parser])
     parser_psnr.add_argument('filename_diff', type=str, help='filename')
     parser_psnr.set_defaults(func=__cmd_psnr)
+
+    # create parser for the 'ssim' command
+    parser_psnr = subparsers.add_parser('ssim',
+            help='Calculate ssim for each frame, luma data only',
+            parents=[parent_parser])
+    parser_psnr.add_argument('filename_diff', type=str, help='filename')
+    parser_psnr.set_defaults(func=__cmd_ssim)
 
     # create parser for the 'get_luma' command
     parser_info = subparsers.add_parser('get_luma',

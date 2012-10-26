@@ -123,9 +123,20 @@ class TestYCbCrFunctions(unittest.TestCase):
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
                   yuv_format_in='YV12', filename_diff='foreman_cif_frame_1.yuv')
 
-        ret = a.psnr()
+        ret = a.psnr().next()
 
-        self.assertEqual(ret, [29.417480696534724])
+        self.assertEqual(ret, [27.717365657171168, 43.05959038403312, 43.377451819757276])
+
+    def test_9(self):
+        """
+        ssim
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12', filename_diff='foreman_cif_frame_1.yuv')
+
+        ret = a.ssim().next()
+
+        self.assertEqual(ret, 0.8714863949031405)
 
 if __name__ == '__main__':
     unittest.main()

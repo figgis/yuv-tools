@@ -19,8 +19,9 @@ Supported operations:
 * convert between any of the formats above (including correct sub- re-sampling of chroma-data)
 * split a file into individual frames
 * creates a diff between two files
-* PSNR calculations
+* PSNR calculations, one value per color-plane
 * get luma-data per frame
+* SSIM calculation on luma
 
 
 Usage
@@ -31,11 +32,13 @@ Usage
 	$ ./ycbcr.py diff --help
 	$ ./ycbcr.py split --help
 	$ ./ycbcr.py psnr --help
+	$ ./ycbcr.py ssim --help
 	$ ./plot_diff.py foreman_cif_frame_0.yuv foreman_cif_frame_1.yuv 352 288 YV12
 
 Files
 -----
 
 * ycbcr.py - main class
-* plot_diff.py - matplotlib wrapper around PSNR-calculation. Generate nice plots using luma-data.
+* plot_diff.py - matplotlib wrapper around PSNR/SSIM-calculation. Generate nice plots using luma-data.
 * verify.py - unittest
+
