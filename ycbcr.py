@@ -143,7 +143,9 @@ class YCbCr:
 #-------------------------------------------------------------------------------
     def psnr(self):
         """
-        Well, PSNR calculations on a frame-basis between two files.
+        PSNR calculations.
+        Generator gives PSNR for
+        [Y, Cb, Cr, whole frame]
 
         http://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
         """
@@ -160,18 +162,15 @@ class YCbCr:
              open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_1)
-                y1 = list(self.y)
-                cb1 = list(self.cb)
-                cr1 = list(self.cr)
+                y1, cb1, cr1, raw1 = self.__copy_planes()
                 self.__read_frame(fd_2)
-                y2 = list(self.y)
-                cb2 = list(self.cb)
-                cr2 = list(self.cr)
+                y2, cb2, cr2, raw2 = self.__copy_planes()
 
-                frame1 = [y1, cb1, cr1]
-                frame2 = [y2, cb2, cr2]
+                frame1 = [y1, cb1, cr1, raw1]
+                frame2 = [y2, cb2, cr2, raw2]
 
-                mse = [sum_square_err(x, y) / float(len(x)) for x, y in zip(frame1, frame2)]
+                mse = [sum_square_err(x, y) / float(len(x)) \
+                        for x, y in zip(frame1, frame2)]
                 yield [psnr(i) for i in mse]
 #-------------------------------------------------------------------------------
     def ssim(self):
@@ -180,6 +179,7 @@ class YCbCr:
 
         implementation using scipy and numpy from
         http://isit.u-clermont1.fr/~anvacava/code.html
+        by antoine.vacavant@udamail.fr
         """
         import numpy
         import scipy.ndimage
@@ -259,7 +259,6 @@ class YCbCr:
             n = numpy.array(x, dtype=numpy.uint8)
             return numpy.reshape(n, (h, w))
 
-
         with open(self.filename, 'rb') as fd_1, \
              open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
@@ -284,6 +283,20 @@ class YCbCr:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_in)
                 yield self.y
+#-------------------------------------------------------------------------------
+    def split(self):
+        """
+        Split a file into separate frames.
+        """
+        src_yuv = open(self.filename, 'rb')
+
+        for i in xrange(self.num_frames):
+            data = src_yuv.read(self.frame_size_in)
+            fname = "frame" + "%d" % i + ".yuv"
+            dst_yuv = open(fname, 'wb')
+            dst_yuv.write(data)           # write read data into new file
+            dst_yuv.close()
+        src_yuv.close()
 #-------------------------------------------------------------------------------
     def __check(self):
         """
@@ -385,23 +398,23 @@ class YCbCr:
         self.cb = array.array('B')
         self.cr = array.array('B')
 
-        raw = array.array('B')
-        raw.fromfile(fd, self.frame_size_in)
+        self.raw = array.array('B')
+        self.raw.fromfile(fd, self.frame_size_in)
 
         if self.yuv_format_in in packed:
-            self.y  = raw[self.layout[self.yuv_format_in]['y_start_pos']::
-                          self.layout[self.yuv_format_in]['y_stride']]
-            self.cb = raw[self.layout[self.yuv_format_in]['cb_start_pos']::
-                          self.layout[self.yuv_format_in]['cb_stride']]
-            self.cr = raw[self.layout[self.yuv_format_in]['cr_start_pos']::
-                          self.layout[self.yuv_format_in]['cb_stride']]
+            self.y  = self.raw[self.layout[self.yuv_format_in]['y_start_pos']::
+                               self.layout[self.yuv_format_in]['y_stride']]
+            self.cb = self.raw[self.layout[self.yuv_format_in]['cb_start_pos']::
+                               self.layout[self.yuv_format_in]['cb_stride']]
+            self.cr = self.raw[self.layout[self.yuv_format_in]['cr_start_pos']::
+                               self.layout[self.yuv_format_in]['cb_stride']]
         else:
-            self.y  = raw[self.layout[self.yuv_format_in]['y_start_pos']:
-                          self.layout[self.yuv_format_in]['y_stride']]
-            self.cb = raw[self.layout[self.yuv_format_in]['cb_start_pos']:
-                          self.layout[self.yuv_format_in]['cb_stride']]
-            self.cr = raw[self.layout[self.yuv_format_in]['cr_start_pos']:
-                          self.layout[self.yuv_format_in]['cr_stride']]
+            self.y  = self.raw[self.layout[self.yuv_format_in]['y_start_pos']:
+                               self.layout[self.yuv_format_in]['y_stride']]
+            self.cb = self.raw[self.layout[self.yuv_format_in]['cb_start_pos']:
+                               self.layout[self.yuv_format_in]['cb_stride']]
+            self.cr = self.raw[self.layout[self.yuv_format_in]['cr_start_pos']:
+                               self.layout[self.yuv_format_in]['cr_stride']]
 #-------------------------------------------------------------------------------
     def __write_frame(self, fd):
         """
@@ -538,9 +551,9 @@ class YCbCr:
         Conversion to YCbCr color space.
         CCIR 601 formulas from "Digital Pictures by Natravali and Haskell, page 120.
         """
-        y  =  _clip2UInt8( 0.257*r + 0.504*g + 0.098*b + 16)
-        cb =  _clip2UInt8(-0.148*r - 0.291*g + 0.439*b + 128)
-        cr =  _clip2UInt8( 0.439*r - 0.368*g - 0.071*b + 128)
+        y  =  self.__clip2UInt8( 0.257*r + 0.504*g + 0.098*b + 16)
+        cb =  self.__clip2UInt8(-0.148*r - 0.291*g + 0.439*b + 128)
+        cr =  self.__clip2UInt8( 0.439*r - 0.368*g - 0.071*b + 128)
 
         return (y, cb, cr)
 #-------------------------------------------------------------------------------
@@ -555,13 +568,13 @@ class YCbCr:
         cb = cb-128
         cr = cr-128
 
-        r = _clip2UInt8(1.164*y            + 1.596*cr)
-        g = _clip2UInt8(1.164*y - 0.392*cb - 0.813*cr)
-        b = _clip2UInt8(1.164*y + 2.017*cb           )
+        r = self.__clip2UInt8(1.164*y            + 1.596*cr)
+        g = self.__clip2UInt8(1.164*y - 0.392*cb - 0.813*cr)
+        b = self.__clip2UInt8(1.164*y + 2.017*cb           )
 
         return (r, g, b)
 #-------------------------------------------------------------------------------
-    def _clip2UInt8(self, d):
+    def __clip2UInt8(self, d):
         "Clip d to interval 0-255"
 
         if (d < 0 ):
@@ -572,19 +585,12 @@ class YCbCr:
 
         return int(round(d))
 #-------------------------------------------------------------------------------
-    def split(self):
+    def __copy_planes(self):
         """
-        Split a file into separate frames.
+        Return a copy of the different color planes,
+        including whole frame
         """
-        src_yuv = open(self.filename, 'rb')
-
-        for i in xrange(self.num_frames):
-            data = src_yuv.read(self.frame_size_in)
-            fname = "frame" + "%d" % i + ".yuv"
-            dst_yuv = open(fname, 'wb')
-            dst_yuv.write(data)           # write read data into new file
-            dst_yuv.close()
-        src_yuv.close()
+        return list(self.y), list(self.cb), list(self.cr), list(self.raw)
 #-------------------------------------------------------------------------------
 
 # Helper functions
