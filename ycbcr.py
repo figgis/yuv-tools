@@ -11,10 +11,7 @@ import math
 import sys
 import os
 
-class Format(Exception):
-    pass
 
-#-------------------------------------------------------------------------------
 class YCbCr:
     """
     Tools to work with raw video in YCbCr format.
@@ -37,8 +34,8 @@ class YCbCr:
         http://www.libsdl.org/docs/html/sdloverlay.html
     """
     def __init__(self, width=0, height=0, filename=None, yuv_format_in=None,
-            yuv_format_out=None, filename_out=None, filename_diff=None,
-            func=None):
+                 yuv_format_out=None, filename_out=None, filename_diff=None,
+                 func=None):
 
         if yuv_format_in not in ['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2', None]:
             raise NameError('format not supported! "%s"' % yuv_format_in)
@@ -63,9 +60,11 @@ class YCbCr:
 
         self.layout = None
 
-        self.__calc()
-        self.__check()
-#-------------------------------------------------------------------------------
+        # 8bpp -> 10bpp, 10->8 dito; special handling
+        if self.yuv_format_in is not None:
+            self.__calc()
+            self.__check()
+
     def show(self):
         """
         Display basic info.
@@ -82,7 +81,7 @@ class YCbCr:
         print "Size of 1 frame (in) (bytes):", self.frame_size_in
         print "Size of 1 frame (out) (bytes):", self.frame_size_out
         print
-#-------------------------------------------------------------------------------
+
     def convert(self):
         """
         Format-conversion between the supported formats.
@@ -90,7 +89,7 @@ class YCbCr:
         subsampling when necessary.
         """
         with open(self.filename, 'rb') as fd_in, \
-             open(self.filename_out, 'wb') as fd_out:
+                open(self.filename_out, 'wb') as fd_out:
             for i in xrange(self.num_frames):
                 # 1. read one frame, result in self.{y, cb, cr}
                 self.__read_frame(fd_in)
@@ -99,7 +98,7 @@ class YCbCr:
                 self.__write_frame(fd_out)
                 sys.stdout.write('.')
                 sys.stdout.flush()
-#-------------------------------------------------------------------------------
+
     def diff(self):
         """
         Produces a YV12 file containing the luma-difference between
@@ -117,13 +116,13 @@ class YCbCr:
 
         base1 = os.path.basename(self.filename)
         base2 = os.path.basename(self.filename_diff)
-        out = os.path.splitext(base1)[0] +'_' + \
-              os.path.splitext(base2)[0] + '_diff.yuv'
+        out = os.path.splitext(base1)[0] + '_' + \
+                os.path.splitext(base2)[0] + '_diff.yuv'
 
-        chroma = [0x80] * (self.width*self.height/2)
+        chroma = [0x80] * (self.width * self.height / 2)
         fd_out = open(out, 'wb')
         with open(self.filename, 'rb') as fd_1, \
-             open(self.filename_diff, 'rb') as fd_2:
+                open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_1)
                 data1 = list(self.y)
@@ -132,7 +131,7 @@ class YCbCr:
 
                 D = []
                 for x, y in zip(data1, data2):
-                    D.append(clip(0x80-abs(x-y)))
+                    D.append(clip(0x80 - abs(x - y)))
 
                 fd_out.write(array.array('B', D).tostring())
                 fd_out.write(array.array('B', chroma).tostring())
@@ -140,7 +139,7 @@ class YCbCr:
                 sys.stdout.write('.')
                 sys.stdout.flush()
         fd_out.close()
-#-------------------------------------------------------------------------------
+
     def psnr(self):
         """
         PSNR calculations.
@@ -153,13 +152,13 @@ class YCbCr:
             log10 = math.log10
             if mse == 0:
                 return float("nan")
-            return 10.0*log10(float(256*256)/float(mse))
+            return 10.0 * log10(float(256 * 256) / float(mse))
 
         def sum_square_err(data1, data2):
-            return sum((a-b)*(a-b) for a, b in zip(data1, data2))
+            return sum((a - b) * (a - b) for a, b in zip(data1, data2))
 
         with open(self.filename, 'rb') as fd_1, \
-             open(self.filename_diff, 'rb') as fd_2:
+                open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_1)
                 y1, cb1, cr1, raw1 = self.__copy_planes()
@@ -169,10 +168,10 @@ class YCbCr:
                 frame1 = [y1, cb1, cr1, raw1]
                 frame2 = [y2, cb2, cr2, raw2]
 
-                mse = [sum_square_err(x, y) / float(len(x)) \
-                        for x, y in zip(frame1, frame2)]
+                mse = [sum_square_err(x, y) / float(len(x))
+                       for x, y in zip(frame1, frame2)]
                 yield [psnr(i) for i in mse]
-#-------------------------------------------------------------------------------
+
     def ssim(self):
         """
         http://en.wikipedia.org/wiki/Structural_similarity
@@ -188,67 +187,67 @@ class YCbCr:
 
         def compute_ssim(img_mat_1, img_mat_2):
             #Variables for Gaussian kernel definition
-            gaussian_kernel_sigma=1.5
-            gaussian_kernel_width=11
-            gaussian_kernel=numpy.zeros((gaussian_kernel_width,gaussian_kernel_width))
+            gaussian_kernel_sigma = 1.5
+            gaussian_kernel_width = 11
+            gaussian_kernel = numpy.zeros((gaussian_kernel_width, gaussian_kernel_width))
 
             #Fill Gaussian kernel
             for i in range(gaussian_kernel_width):
                 for j in range(gaussian_kernel_width):
-                    gaussian_kernel[i,j]=\
-                    (1/(2*pi*(gaussian_kernel_sigma**2)))*\
-                    exp(-(((i-5)**2)+((j-5)**2))/(2*(gaussian_kernel_sigma**2)))
+                    gaussian_kernel[i, j] = \
+                            (1 / (2 * pi * (gaussian_kernel_sigma ** 2))) *\
+                            exp(-(((i-5)**2)+((j-5)**2))/(2*(gaussian_kernel_sigma**2)))
 
             #Convert image matrices to double precision (like in the Matlab version)
-            img_mat_1=img_mat_1.astype(numpy.float)
-            img_mat_2=img_mat_2.astype(numpy.float)
+            img_mat_1 = img_mat_1.astype(numpy.float)
+            img_mat_2 = img_mat_2.astype(numpy.float)
 
             #Squares of input matrices
-            img_mat_1_sq=img_mat_1**2
-            img_mat_2_sq=img_mat_2**2
-            img_mat_12=img_mat_1*img_mat_2
+            img_mat_1_sq = img_mat_1 ** 2
+            img_mat_2_sq = img_mat_2 ** 2
+            img_mat_12 = img_mat_1 * img_mat_2
 
             #Means obtained by Gaussian filtering of inputs
-            img_mat_mu_1=scipy.ndimage.filters.convolve(img_mat_1,gaussian_kernel)
-            img_mat_mu_2=scipy.ndimage.filters.convolve(img_mat_2,gaussian_kernel)
+            img_mat_mu_1 = scipy.ndimage.filters.convolve(img_mat_1, gaussian_kernel)
+            img_mat_mu_2 = scipy.ndimage.filters.convolve(img_mat_2, gaussian_kernel)
 
             #Squares of means
-            img_mat_mu_1_sq=img_mat_mu_1**2
-            img_mat_mu_2_sq=img_mat_mu_2**2
-            img_mat_mu_12=img_mat_mu_1*img_mat_mu_2
+            img_mat_mu_1_sq = img_mat_mu_1 ** 2
+            img_mat_mu_2_sq = img_mat_mu_2 ** 2
+            img_mat_mu_12 = img_mat_mu_1 * img_mat_mu_2
 
             #Variances obtained by Gaussian filtering of inputs' squares
-            img_mat_sigma_1_sq=scipy.ndimage.filters.convolve(img_mat_1_sq,gaussian_kernel)
-            img_mat_sigma_2_sq=scipy.ndimage.filters.convolve(img_mat_2_sq,gaussian_kernel)
+            img_mat_sigma_1_sq = scipy.ndimage.filters.convolve(img_mat_1_sq, gaussian_kernel)
+            img_mat_sigma_2_sq = scipy.ndimage.filters.convolve(img_mat_2_sq, gaussian_kernel)
 
             #Covariance
-            img_mat_sigma_12=scipy.ndimage.filters.convolve(img_mat_12,gaussian_kernel)
+            img_mat_sigma_12 = scipy.ndimage.filters.convolve(img_mat_12, gaussian_kernel)
 
             #Centered squares of variances
-            img_mat_sigma_1_sq=img_mat_sigma_1_sq-img_mat_mu_1_sq
-            img_mat_sigma_2_sq=img_mat_sigma_2_sq-img_mat_mu_2_sq
-            img_mat_sigma_12=img_mat_sigma_12-img_mat_mu_12;
+            img_mat_sigma_1_sq = img_mat_sigma_1_sq - img_mat_mu_1_sq
+            img_mat_sigma_2_sq = img_mat_sigma_2_sq - img_mat_mu_2_sq
+            img_mat_sigma_12 = img_mat_sigma_12 - img_mat_mu_12
 
             #c1/c2 constants
             #First use: manual fitting
-            c_1=6.5025
-            c_2=58.5225
+            c_1 = 6.5025
+            c_2 = 58.5225
 
             #Second use: change k1,k2 & c1,c2 depend on L (width of color map)
-            l=255
-            k_1=0.01
-            c_1=(k_1*l)**2
-            k_2=0.03
-            c_2=(k_2*l)**2
+            l = 255
+            k_1 = 0.01
+            c_1 = (k_1 * l) ** 2
+            k_2 = 0.03
+            c_2 = (k_2 * l) ** 2
 
             #Numerator of SSIM
-            num_ssim=(2*img_mat_mu_12+c_1)*(2*img_mat_sigma_12+c_2)
+            num_ssim = (2 * img_mat_mu_12 + c_1) * (2 * img_mat_sigma_12 + c_2)
             #Denominator of SSIM
-            den_ssim=(img_mat_mu_1_sq+img_mat_mu_2_sq+c_1)*\
-            (img_mat_sigma_1_sq+img_mat_sigma_2_sq+c_2)
+            den_ssim = (img_mat_mu_1_sq + img_mat_mu_2_sq + c_1) *\
+                (img_mat_sigma_1_sq + img_mat_sigma_2_sq + c_2)
             #SSIM
-            ssim_map=num_ssim/den_ssim
-            index=numpy.average(ssim_map)
+            ssim_map = num_ssim / den_ssim
+            index = numpy.average(ssim_map)
 
             return index
 
@@ -260,7 +259,7 @@ class YCbCr:
             return numpy.reshape(n, (h, w))
 
         with open(self.filename, 'rb') as fd_1, \
-             open(self.filename_diff, 'rb') as fd_2:
+                open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_1)
                 data1 = list(self.y)
@@ -268,8 +267,8 @@ class YCbCr:
                 data2 = list(self.y)
 
                 yield compute_ssim(l2n(data1, self.width, self.height),
-                        l2n(data2, self.width, self.height))
-#-------------------------------------------------------------------------------
+                                   l2n(data2, self.width, self.height))
+
     def get_luma(self, alt_fname=False):
         """
         Generator to get luminance-data for all frames
@@ -283,7 +282,7 @@ class YCbCr:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_in)
                 yield self.y
-#-------------------------------------------------------------------------------
+
     def split(self):
         """
         Split a file into separate frames.
@@ -297,7 +296,7 @@ class YCbCr:
             dst_yuv.write(data)           # write read data into new file
             dst_yuv.close()
         src_yuv.close()
-#-------------------------------------------------------------------------------
+
     def eight2ten(self):
         """
         8 bpp -> 10 bpp
@@ -321,7 +320,7 @@ class YCbCr:
                     data.append((i >> 8) & 0xff)
 
                 fd_out.write(array.array('B', data).tostring())
-#-------------------------------------------------------------------------------
+
     def ten2eight(self):
         """
         10 bpp -> 8 bpp
@@ -332,7 +331,7 @@ class YCbCr:
         data = array.array('B')
 
         with open(self.filename, 'rb') as fd_in, \
-             open(self.filename_out, 'wb') as fd_out:
+                open(self.filename_out, 'wb') as fd_out:
 
             for i in xrange(0, num_bytes, 2):
                 raw.fromfile(fd_in, 2)
@@ -345,7 +344,7 @@ class YCbCr:
 
             #fd_out.write(array.array('B', data).tostring())
             data.tofile(fd_out)
-#-------------------------------------------------------------------------------
+
     def __check(self):
         """
         Basic consistency checks to prevent fumbly-fingers
@@ -353,9 +352,6 @@ class YCbCr:
         - number of frames divides file-size evenly
         - for diff-cmd, file-sizes match
         """
-
-        if self.yuv_format_in is None:
-            return
 
         if self.width & 0xF != 0:
             print >> sys.stderr, "[WARNING] - width not divisable by 16"
@@ -369,28 +365,25 @@ class YCbCr:
         if self.filename_diff:
             if not os.path.getsize(self.filename) == os.path.getsize(self.filename_diff):
                 print >> sys.stderr, "[WARNING] - file-sizes are not equal"
-#-------------------------------------------------------------------------------
+
     def __calc(self):
         """
         Setup some variables and calculate the layout-dictionary
         containing info on howto read/write the various supported
         formats
         """
-        if self.yuv_format_in is None:
-            return
-
-        sampling = { 'IYUV':1.5,
-                     'UYVY':2,
-                     'YV12':1.5,
-                     'YVYU':2,
-                     '422' :2,
-                     'YUY2':2,}
+        sampling = {'IYUV': 1.5,
+                    'UYVY': 2,
+                    'YV12': 1.5,
+                    'YVYU': 2,
+                     '422': 2,
+                    'YUY2': 2}
 
         self.frame_size_in = int(self.width * self.height *
-                              sampling[self.yuv_format_in])
+                                 sampling[self.yuv_format_in])
         if self.yuv_format_out:
             self.frame_size_out = int(self.width * self.height *
-                    sampling[self.yuv_format_out])
+                                      sampling[self.yuv_format_out])
 
         self.num_frames = os.stat(self.filename)[6] / self.frame_size_in
 
@@ -399,19 +392,19 @@ class YCbCr:
         ys = 0
         ye = self.width * self.height
         cbs = ye
-        cbe = cbs+ye/4
-        cbee = cbs+ye/2
+        cbe = cbs + ye / 4
+        cbee = cbs + ye / 2
         crs = cbe
         crss = cbee
-        cre = crs+ye/4
-        cree = crss+ye/2
+        cre = crs + ye / 4
+        cree = crss + ye / 2
 
         # Instead of using separate read/write function for each supported
         # format, store start_pos and stride for each format in a dictionary
         # and use extended indexing to place the data where it belongs.
         # Works great for packed formats; for planar use normal slicing
         self.layout = {
-                'UYVY': { # U0|Y0|V0|Y1
+                'UYVY': {  # U0|Y0|V0|Y1
                     'y_start_pos':  1, 'y_stride'  :   2,
                     'cb_start_pos': 0, 'cb_stride':    4,
                     'cr_start_pos': 2, 'cr_stride':    4,
@@ -442,12 +435,12 @@ class YCbCr:
                     'cr_start_pos': crss, 'cr_stride':  cree,
                     }
                 }
-#-------------------------------------------------------------------------------
+
     def __read_frame(self, fd):
         """
         Use extended indexing to read 1 frame into self.{y, cb, cr}
         """
-        packed = ('UYVY', 'YVYU','YUY2')
+        packed = ('UYVY', 'YVYU', 'YUY2')
 
         self.y = array.array('B')
         self.cb = array.array('B')
@@ -470,13 +463,13 @@ class YCbCr:
                                self.layout[self.yuv_format_in]['cb_stride']]
             self.cr = self.raw[self.layout[self.yuv_format_in]['cr_start_pos']:
                                self.layout[self.yuv_format_in]['cr_stride']]
-#-------------------------------------------------------------------------------
+
     def __write_frame(self, fd):
         """
         Use extended indexing to write 1 frame, including re-sampling and
         format conversion
         """
-        packed = ('UYVY', 'YVYU','YUY2')
+        packed = ('UYVY', 'YVYU', 'YUY2')
 
         self.__resample()
         data = [0] * self.frame_size_out
@@ -497,7 +490,7 @@ class YCbCr:
                  self.layout[self.yuv_format_out]['cr_stride']] = self.cr
 
         fd.write(array.array('B', data).tostring())
-#-------------------------------------------------------------------------------
+
     def __resample(self):
         """
         Handle 420 -> 422 and 422 -> 420
@@ -518,7 +511,7 @@ class YCbCr:
 
             self.cb = self.__conv422to420(self.cb, cb)
             self.cr = self.__conv422to420(self.cr, cr)
-#-------------------------------------------------------------------------------
+
     def __conv420to422(self, src, dst):
         """
         420 to 422 - vertical 1:2 interpolation filter
@@ -559,7 +552,7 @@ class YCbCr:
                 dst[i+w*(j2+1)] = pel if pel > 0 else 0
                 dst[i+w*(j2+1)] = pel if pel < 255 else 255
         return dst
-#-------------------------------------------------------------------------------
+
     def __conv422to420(self, src, dst):
         """
         422 -> 420
@@ -598,37 +591,7 @@ class YCbCr:
                 dst[i+w*(j>>1)] = pel if pel > 0 else 0
                 dst[i+w*(j>>1)] = pel if pel < 255 else 255
         return dst
-#-------------------------------------------------------------------------------
-    def __conv8to10(self, src, dst):
-        """
-        8 bpp -> 10 bpp
-        """
-        for n, i in enumerate(src):
-            i <<= 2
-            dst[2*n] = i & 0xff
-            dst[2*n+1] = (i >> 8) & 0xff
 
-        return dst
-#-------------------------------------------------------------------------------
-    def __conv10to8(self, src, dst):
-        """
-        10 bpp -> 8 bpp
-        """
-        def clip(mi, ma, x):
-            if x < mi: return mi
-            if x > ma: return ma
-            return x
-
-        offset = 2
-        print 'src', len(src)
-        print 'dst', len(dst)
-        for n, i in enumerate(dst):
-            pel = (src[2*n+1] << 8) | src[2*n]
-            val = (pel + offset) >> 2
-            dst[n] = clip(0, 255, val)
-
-        return dst
-#-------------------------------------------------------------------------------
     def __rgb2ycbcr(self, r, g, b):
         """
         (r,g,b) -> (y, cb, cr)
@@ -636,12 +599,12 @@ class YCbCr:
         Conversion to YCbCr color space.
         CCIR 601 formulas from "Digital Pictures by Natravali and Haskell, page 120.
         """
-        y  =  self.__clip2UInt8( 0.257*r + 0.504*g + 0.098*b + 16)
-        cb =  self.__clip2UInt8(-0.148*r - 0.291*g + 0.439*b + 128)
-        cr =  self.__clip2UInt8( 0.439*r - 0.368*g - 0.071*b + 128)
+        y  = self.__clip2UInt8( 0.257 * r + 0.504 * g + 0.098 * b + 16)
+        cb = self.__clip2UInt8(-0.148 * r - 0.291 * g + 0.439 * b + 128)
+        cr = self.__clip2UInt8( 0.439 * r - 0.368 * g - 0.071 * b + 128)
 
         return (y, cb, cr)
-#-------------------------------------------------------------------------------
+
     def __ycbcr2rgb(self, y, cb, cr):
         """
         (y,cb,cr) -> (r, g, b)
@@ -649,34 +612,33 @@ class YCbCr:
         Conversion to RGB color space.
         CCIR 601 formulas from "Digital Pictures by Natravali and Haskell, page 120.
         """
-        y =  y-16
-        cb = cb-128
-        cr = cr-128
+        y =  y - 16
+        cb = cb - 128
+        cr = cr - 128
 
-        r = self.__clip2UInt8(1.164*y            + 1.596*cr)
-        g = self.__clip2UInt8(1.164*y - 0.392*cb - 0.813*cr)
-        b = self.__clip2UInt8(1.164*y + 2.017*cb           )
+        r = self.__clip2UInt8(1.164 * y              + 1.596 * cr)
+        g = self.__clip2UInt8(1.164 * y - 0.392 * cb - 0.813 * cr)
+        b = self.__clip2UInt8(1.164 * y + 2.017 * cb)
 
         return (r, g, b)
-#-------------------------------------------------------------------------------
+
     def __clip2UInt8(self, d):
         "Clip d to interval 0-255"
 
-        if (d < 0 ):
+        if (d < 0):
             return 0
 
         if (d > 255):
             return 255
 
         return int(round(d))
-#-------------------------------------------------------------------------------
+
     def __copy_planes(self):
         """
         Return a copy of the different color planes,
         including whole frame
         """
         return list(self.y), list(self.cb), list(self.cr), list(self.raw)
-#-------------------------------------------------------------------------------
 
 
 def main():
@@ -723,84 +685,95 @@ def main():
         yuv.ten2eight()
 
     # create the top-level parser
-    parser = argparse.ArgumentParser(description='YCbCr tools',
-            epilog=' Be careful with those bits')
-    subparsers = parser.add_subparsers(title='subcommands',
-                                       help='additional help')
+    parser = argparse.ArgumentParser(
+        description='YCbCr tools',
+        epilog=' Be careful with those bits')
+    subparsers = parser.add_subparsers(
+        title='subcommands',
+        help='additional help')
 
     # parent, common arguments for functions
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument('filename', type=str, help='filename')
     parent_parser.add_argument('width', type=int)
     parent_parser.add_argument('height', type=int)
-    parent_parser.add_argument('yuv_format_in', type=str,
-            choices=['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2'],
-            help='valid input-formats')
+    parent_parser.add_argument(
+        'yuv_format_in', type=str,
+        choices=['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2'],
+        help='valid input-formats')
 
     # create parser for the 'info' command
-    parser_info = subparsers.add_parser('info',
-            help='Basic info about YCbCr file',
-            parents=[parent_parser])
+    parser_info = subparsers.add_parser(
+        'info',
+        help='Basic info about YCbCr file',
+        parents=[parent_parser])
     parser_info.set_defaults(func=__cmd_info)
 
     # create parser for the 'split' command
-    parser_split = subparsers.add_parser('split',
-            help='Split a YCbCr file into individual frames',
-            parents=[parent_parser])
+    parser_split = subparsers.add_parser(
+        'split',
+        help='Split a YCbCr file into individual frames',
+        parents=[parent_parser])
     parser_split.set_defaults(func=__cmd_split)
 
     # create parser for the 'convert' command
-    parser_convert = subparsers.add_parser('convert',
-            help='YCbCr format conversion',
-            parents=[parent_parser])
-    parser_convert.add_argument('yuv_format_out', type=str,
-            choices=['IYUV', 'UYVY', 'YV12', 'YVYU', '422', 'YUY2'],
-            help='valid output-formats')
+    parser_convert = subparsers.add_parser(
+        'convert',
+        help='YCbCr format conversion',
+        parents=[parent_parser])
+    parser_convert.add_argument(
+        'yuv_format_out', type=str,
+        choices=['IYUV', 'UYVY', 'YV12', 'YVYU', '422', 'YUY2'],
+        help='valid output-formats')
     parser_convert.add_argument('filename_out', type=str,
-            help='file to write to')
+                                help='file to write to')
     parser_convert.set_defaults(func=__cmd_convert)
 
     # create parser for the 'diff' command
-    parser_diff = subparsers.add_parser('diff',
-            help='Create diff between two YCbCr files',
-            parents=[parent_parser])
+    parser_diff = subparsers.add_parser(
+        'diff',
+        help='Create diff between two YCbCr files',
+        parents=[parent_parser])
     parser_diff.add_argument('filename_diff', type=str, help='filename')
     parser_diff.set_defaults(func=__cmd_diff)
 
     # create parser for the 'psnr' command
-    parser_psnr = subparsers.add_parser('psnr',
-            help='Calculate PSNR for each frame, luma data only',
-            parents=[parent_parser])
+    parser_psnr = subparsers.add_parser(
+        'psnr',
+        help='Calculate PSNR for each frame, luma data only',
+        parents=[parent_parser])
     parser_psnr.add_argument('filename_diff', type=str, help='filename')
     parser_psnr.set_defaults(func=__cmd_psnr)
 
     # create parser for the 'ssim' command
-    parser_psnr = subparsers.add_parser('ssim',
-            help='Calculate ssim for each frame, luma data only',
-            parents=[parent_parser])
+    parser_psnr = subparsers.add_parser(
+        'ssim',
+        help='Calculate ssim for each frame, luma data only',
+        parents=[parent_parser])
     parser_psnr.add_argument('filename_diff', type=str, help='filename')
     parser_psnr.set_defaults(func=__cmd_ssim)
 
     # create parser for the 'get_luma' command
-    parser_info = subparsers.add_parser('get_luma',
-            help='Return luminance-data for each frame. Generator',
-            parents=[parent_parser])
+    parser_info = subparsers.add_parser(
+        'get_luma',
+        help='Return luminance-data for each frame. Generator',
+        parents=[parent_parser])
     parser_info.set_defaults(func=__cmd_get_luma)
 
     # create parser for the '8to10' command
     parser_8to10 = subparsers.add_parser('8to10',
-            help='YCbCr 8bpp -> 10bpp')
+                                         help='YCbCr 8bpp -> 10bpp')
     parser_8to10.add_argument('filename', type=str, help='filename')
     parser_8to10.add_argument('filename_out', type=str,
-            help='file to write to')
+                              help='file to write to')
     parser_8to10.set_defaults(func=__cmd_8to10)
 
     # create parser for the '10to8' command
     parser_10to8 = subparsers.add_parser('10to8',
-            help='YCbCr 8bpp -> 10bpp')
+                                         help='YCbCr 8bpp -> 10bpp')
     parser_10to8.add_argument('filename', type=str, help='filename')
     parser_10to8.add_argument('filename_out', type=str,
-            help='file to write to')
+                              help='file to write to')
     parser_10to8.set_defaults(func=__cmd_10to8)
 
     # let parse_args() do the job of calling the appropriate function
@@ -809,7 +782,7 @@ def main():
     t1 = time.clock()
     args.func(args)
     t2 = time.clock()
-    print "\nTime: ", round(t2-t1, 4)
+    print "\nTime: ", round(t2 - t1, 4)
 
 if __name__ == '__main__':
     main()

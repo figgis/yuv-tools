@@ -9,6 +9,7 @@ from ycbcr import YCbCr
 SIZE_420 = 152064    # CIF w*h*3/2
 SIZE_422 = 202752    # CIF w*h*2
 
+
 def get_sha1(f, size):
     """
     return sha1sum
@@ -16,6 +17,7 @@ def get_sha1(f, size):
     with open(f, 'rb') as fd:
         buf = fd.read(size)
         return hashlib.sha1(buf).hexdigest()
+
 
 class TestYCbCrFunctions(unittest.TestCase):
 
@@ -84,8 +86,8 @@ class TestYCbCrFunctions(unittest.TestCase):
         YV12 -> 422
         """
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
-                yuv_format_in='YV12',
-                yuv_format_out='422', filename_out='test_5.yuv')
+                  yuv_format_in='YV12',
+                  yuv_format_out='422', filename_out='test_5.yuv')
         a.convert()
 
         ret = get_sha1('test_5.yuv', SIZE_422)
@@ -97,8 +99,8 @@ class TestYCbCrFunctions(unittest.TestCase):
         diff
         """
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
-                yuv_format_in='YV12',
-                filename_diff='foreman_cif_frame_1.yuv')
+                  yuv_format_in='YV12',
+                  filename_diff='foreman_cif_frame_1.yuv')
         a.diff()
 
         ret = get_sha1('foreman_cif_frame_0_foreman_cif_frame_1_diff.yuv', SIZE_420)
