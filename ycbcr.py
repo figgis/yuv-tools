@@ -40,7 +40,7 @@ class YCbCr:
             yuv_format_out=None, filename_out=None, filename_diff=None,
             func=None):
 
-        if yuv_format_in not in ['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2']:
+        if yuv_format_in not in ['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2', None]:
             raise NameError('format not supported! "%s"' % yuv_format_in)
         if yuv_format_out not in ['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2', '422', None]:
             raise NameError('format not supported! "%s"' % yuv_format_out)
@@ -298,6 +298,54 @@ class YCbCr:
             dst_yuv.close()
         src_yuv.close()
 #-------------------------------------------------------------------------------
+    def eight2ten(self):
+        """
+        8 bpp -> 10 bpp
+        """
+        def bytesfromfile(f):
+            while True:
+                raw = array.array('B')
+                raw.fromstring(f.read(8192))
+                if not raw:
+                    break
+                yield raw
+
+        with open(self.filename, 'rb') as fd_in, \
+                open(self.filename_out, 'wb') as fd_out:
+
+            for byte in bytesfromfile(fd_in):
+                data = []
+                for i in byte:
+                    i <<= 2
+                    data.append(i & 0xff)
+                    data.append((i >> 8) & 0xff)
+
+                fd_out.write(array.array('B', data).tostring())
+#-------------------------------------------------------------------------------
+    def ten2eight(self):
+        """
+        10 bpp -> 8 bpp
+        """
+        num_bytes = os.path.getsize(self.filename)
+
+        raw = array.array('B')
+        data = array.array('B')
+
+        with open(self.filename, 'rb') as fd_in, \
+             open(self.filename_out, 'wb') as fd_out:
+
+            for i in xrange(0, num_bytes, 2):
+                raw.fromfile(fd_in, 2)
+                x = raw.pop()
+                y = raw.pop()
+                pel = (x << 8) | y
+                val = (pel + 2) >> 2
+
+                data.append(max(0, min(255, val)))
+
+            #fd_out.write(array.array('B', data).tostring())
+            data.tofile(fd_out)
+#-------------------------------------------------------------------------------
     def __check(self):
         """
         Basic consistency checks to prevent fumbly-fingers
@@ -305,6 +353,10 @@ class YCbCr:
         - number of frames divides file-size evenly
         - for diff-cmd, file-sizes match
         """
+
+        if self.yuv_format_in is None:
+            return
+
         if self.width & 0xF != 0:
             print >> sys.stderr, "[WARNING] - width not divisable by 16"
         if self.height & 0xF != 0:
@@ -324,12 +376,15 @@ class YCbCr:
         containing info on howto read/write the various supported
         formats
         """
+        if self.yuv_format_in is None:
+            return
+
         sampling = { 'IYUV':1.5,
                      'UYVY':2,
                      'YV12':1.5,
                      'YVYU':2,
                      '422' :2,
-                     'YUY2':2}
+                     'YUY2':2,}
 
         self.frame_size_in = int(self.width * self.height *
                               sampling[self.yuv_format_in])
@@ -544,6 +599,36 @@ class YCbCr:
                 dst[i+w*(j>>1)] = pel if pel < 255 else 255
         return dst
 #-------------------------------------------------------------------------------
+    def __conv8to10(self, src, dst):
+        """
+        8 bpp -> 10 bpp
+        """
+        for n, i in enumerate(src):
+            i <<= 2
+            dst[2*n] = i & 0xff
+            dst[2*n+1] = (i >> 8) & 0xff
+
+        return dst
+#-------------------------------------------------------------------------------
+    def __conv10to8(self, src, dst):
+        """
+        10 bpp -> 8 bpp
+        """
+        def clip(mi, ma, x):
+            if x < mi: return mi
+            if x > ma: return ma
+            return x
+
+        offset = 2
+        print 'src', len(src)
+        print 'dst', len(dst)
+        for n, i in enumerate(dst):
+            pel = (src[2*n+1] << 8) | src[2*n]
+            val = (pel + offset) >> 2
+            dst[n] = clip(0, 255, val)
+
+        return dst
+#-------------------------------------------------------------------------------
     def __rgb2ycbcr(self, r, g, b):
         """
         (r,g,b) -> (y, cb, cr)
@@ -593,41 +678,50 @@ class YCbCr:
         return list(self.y), list(self.cb), list(self.cr), list(self.raw)
 #-------------------------------------------------------------------------------
 
-# Helper functions
 
-def __cmd_info(arg):
-    YCbCr(**vars(arg)).show()
+def main():
+    # Helper functions
 
-def __cmd_split(arg):
-    yuv = YCbCr(**vars(arg))
-    yuv.show()
-    yuv.split()
+    def __cmd_info(arg):
+        YCbCr(**vars(arg)).show()
 
-def __cmd_convert(arg):
-    yuv = YCbCr(**vars(arg))
-    yuv.show()
-    yuv.convert()
+    def __cmd_split(arg):
+        yuv = YCbCr(**vars(arg))
+        yuv.show()
+        yuv.split()
 
-def __cmd_diff(arg):
-    yuv = YCbCr(**vars(arg))
-    yuv.show()
-    yuv.diff()
+    def __cmd_convert(arg):
+        yuv = YCbCr(**vars(arg))
+        yuv.show()
+        yuv.convert()
 
-def __cmd_psnr(arg):
-    yuv = YCbCr(**vars(arg))
-    for i, n in enumerate(yuv.psnr()):
-        print i, n
+    def __cmd_diff(arg):
+        yuv = YCbCr(**vars(arg))
+        yuv.show()
+        yuv.diff()
 
-def __cmd_ssim(arg):
-    yuv = YCbCr(**vars(arg))
-    for i, n in enumerate(yuv.ssim()):
-        print i, n
+    def __cmd_psnr(arg):
+        yuv = YCbCr(**vars(arg))
+        for i, n in enumerate(yuv.psnr()):
+            print i, n
 
-def __cmd_get_luma(arg):
-    yuv = YCbCr(**vars(arg))
-    return yuv.get_luma()
+    def __cmd_ssim(arg):
+        yuv = YCbCr(**vars(arg))
+        for i, n in enumerate(yuv.ssim()):
+            print i, n
 
-if __name__ == '__main__':
+    def __cmd_get_luma(arg):
+        yuv = YCbCr(**vars(arg))
+        return yuv.get_luma()
+
+    def __cmd_8to10(arg):
+        yuv = YCbCr(**vars(arg))
+        yuv.eight2ten()
+
+    def __cmd_10to8(arg):
+        yuv = YCbCr(**vars(arg))
+        yuv.ten2eight()
+
     # create the top-level parser
     parser = argparse.ArgumentParser(description='YCbCr tools',
             epilog=' Be careful with those bits')
@@ -693,6 +787,22 @@ if __name__ == '__main__':
             parents=[parent_parser])
     parser_info.set_defaults(func=__cmd_get_luma)
 
+    # create parser for the '8to10' command
+    parser_8to10 = subparsers.add_parser('8to10',
+            help='YCbCr 8bpp -> 10bpp')
+    parser_8to10.add_argument('filename', type=str, help='filename')
+    parser_8to10.add_argument('filename_out', type=str,
+            help='file to write to')
+    parser_8to10.set_defaults(func=__cmd_8to10)
+
+    # create parser for the '10to8' command
+    parser_10to8 = subparsers.add_parser('10to8',
+            help='YCbCr 8bpp -> 10bpp')
+    parser_10to8.add_argument('filename', type=str, help='filename')
+    parser_10to8.add_argument('filename_out', type=str,
+            help='file to write to')
+    parser_10to8.set_defaults(func=__cmd_10to8)
+
     # let parse_args() do the job of calling the appropriate function
     # after argument parsing is complete
     args = parser.parse_args()
@@ -700,3 +810,6 @@ if __name__ == '__main__':
     args.func(args)
     t2 = time.clock()
     print "\nTime: ", round(t2-t1, 4)
+
+if __name__ == '__main__':
+    main()
