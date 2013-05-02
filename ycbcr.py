@@ -12,6 +12,129 @@ import sys
 import os
 
 
+class Y:
+    """
+    BASE
+    """
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.wh = self.width * self.height
+
+    def get_420_partitioning(self):
+        wh = self.wh
+        # start-stop
+        #       y  y   cb  cb      cr      cr
+        return (0, wh, wh, wh/4*5, wh/4*5, wh/2*3)
+
+    def get_422_partitioning(self):
+        wh = self.wh
+        # start-stop
+        #       y  y   cb  cb      cr      cr
+        return (0, wh, wh, wh/2*5, wh/2*5, wh*3)
+
+
+class YV12(Y):
+    """
+    YV12
+    """
+    def get_frame_size(self):
+        return (self.width * self.height * 3 / 2)
+
+    def get_layout(self):
+        """
+        return a tuple of slice-objects
+        """
+        p = self.get_420_partitioning()
+        return (slice(p[0], p[1]),
+                slice(p[2], p[3]),
+                slice(p[4], p[5]))
+
+
+class IYUV(Y):
+    """
+    IYUV
+    """
+    def get_frame_size(self):
+        return (self.width * self.height * 3 / 2)
+
+    def get_layout(self):
+        p = self.get_420_partitioning()
+        return (slice(p[0], p[1]),
+                slice(p[4], p[5]),
+                slice(p[2], p[3]))
+
+
+class UYVY(Y):
+    """
+    UYVY
+    """
+    def get_frame_size(self):
+        return (self.width * self.height * 2)
+
+    def get_layout(self):
+        fs = self.get_frame_size()
+        return (slice(1, fs, 2),
+                slice(0, fs, 4),
+                slice(2, fs, 4))
+
+
+class YVYU(Y):
+    """
+    YVYU
+    """
+    def get_frame_size(self):
+        return (self.width * self.height * 2)
+
+    def get_layout(self):
+        fs = self.get_frame_size()
+        return (slice(0, fs, 2),
+                slice(3, fs, 4),
+                slice(1, fs, 4))
+
+
+class YUY2(Y):
+    """
+    YUY2
+    """
+    def get_frame_size(self):
+        return (self.width * self.height * 2)
+
+    def get_layout(self):
+        fs = self.get_frame_size()
+        return (slice(0, fs, 2),
+                slice(1, fs, 4),
+                slice(3, fs, 4))
+
+
+class Y422(Y):
+    """
+    422
+    """
+    def get_frame_size(self):
+        return (self.width * self.height * 2)
+
+    def get_layout(self):
+        p = self.get_422_partitioning()
+        return (slice(p[0], p[1]),
+                slice(p[2], p[3]),
+                slice(p[4], p[5]))
+
+
+class Y8to10(Y):
+    """
+    8bpp -> 10bpp
+    """
+    pass
+
+
+class Y10to8(Y):
+    """
+    10bpp -> 8bpp
+    """
+    pass
+
+
 class YCbCr:
     """
     Tools to work with raw video in YCbCr format.
@@ -50,19 +173,40 @@ class YCbCr:
         self.yuv_format_in = yuv_format_in
         self.yuv_format_out = yuv_format_out
 
-        self.frame_size_in = 0
-        self.frame_size_out = None
-        self.num_frames = 0
-
         self.y = None
         self.cb = None
         self.cr = None
 
-        self.layout = None
+        # Reader/Writer
+        RW = {
+            'YV12': YV12,
+            'IYUV': IYUV,
+            'UYVY': UYVY,
+            'YVYU': YVYU,
+            'YUY2': YUY2,
+            '422': Y422,
+            'e2t': Y8to10,
+            't28': Y10to8,
+        }
+
+        # selector
+        try:
+            s_in = RW[self.yuv_format_in](self.width, self.height)
+            self.frame_size_in = s_in.get_frame_size()
+            self.num_frames = os.path.getsize(self.filename) / self.frame_size_in
+            self.layout_in = s_in.get_layout()
+        except KeyError:
+            pass
+
+        try:
+            s_out = RW[self.yuv_format_out](self.width, self.height)
+            self.frame_size_out = s_out.get_frame_size()
+            self.layout_out = s_out.get_layout()
+        except KeyError:
+            self.frame_size_out = None
 
         # 8bpp -> 10bpp, 10->8 dito; special handling
         if self.yuv_format_in is not None:
-            self.__calc()
             self.__check()
 
     def show(self):
@@ -104,20 +248,10 @@ class YCbCr:
         Produces a YV12 file containing the luma-difference between
         two files.
         """
-        def clip(data):
-            """
-            clip function
-            """
-            if data > 255:
-                data = 255
-            elif data < 0:
-                data = 0
-            return data
-
         base1 = os.path.basename(self.filename)
         base2 = os.path.basename(self.filename_diff)
         out = os.path.splitext(base1)[0] + '_' + \
-                os.path.splitext(base2)[0] + '_diff.yuv'
+            os.path.splitext(base2)[0] + '_diff.yuv'
 
         chroma = [0x80] * (self.width * self.height / 2)
         fd_out = open(out, 'wb')
@@ -131,8 +265,7 @@ class YCbCr:
 
                 D = []
                 for x, y in zip(data1, data2):
-                    D.append(clip(0x80 - abs(x - y)))
-
+                    D.append(max(0, min(255, (0x80 - abs(x - y)))))
                 fd_out.write(array.array('B', D).tostring())
                 fd_out.write(array.array('B', chroma).tostring())
 
@@ -179,6 +312,7 @@ class YCbCr:
         implementation using scipy and numpy from
         http://isit.u-clermont1.fr/~anvacava/code.html
         by antoine.vacavant@udamail.fr
+        Usage by kind permission from author.
         """
         import numpy
         import scipy.ndimage
@@ -195,8 +329,8 @@ class YCbCr:
             for i in range(gaussian_kernel_width):
                 for j in range(gaussian_kernel_width):
                     gaussian_kernel[i, j] = \
-                            (1 / (2 * pi * (gaussian_kernel_sigma ** 2))) *\
-                            exp(-(((i-5)**2)+((j-5)**2))/(2*(gaussian_kernel_sigma**2)))
+                        (1 / (2 * pi * (gaussian_kernel_sigma ** 2))) *\
+                        exp(-(((i-5)**2)+((j-5)**2))/(2*(gaussian_kernel_sigma**2)))
 
             #Convert image matrices to double precision (like in the Matlab version)
             img_mat_1 = img_mat_1.astype(numpy.float)
@@ -366,82 +500,10 @@ class YCbCr:
             if not os.path.getsize(self.filename) == os.path.getsize(self.filename_diff):
                 print >> sys.stderr, "[WARNING] - file-sizes are not equal"
 
-    def __calc(self):
-        """
-        Setup some variables and calculate the layout-dictionary
-        containing info on howto read/write the various supported
-        formats
-        """
-        sampling = {'IYUV': 1.5,
-                    'UYVY': 2,
-                    'YV12': 1.5,
-                    'YVYU': 2,
-                     '422': 2,
-                    'YUY2': 2}
-
-        self.frame_size_in = int(self.width * self.height *
-                                 sampling[self.yuv_format_in])
-        if self.yuv_format_out:
-            self.frame_size_out = int(self.width * self.height *
-                                      sampling[self.yuv_format_out])
-
-        self.num_frames = os.stat(self.filename)[6] / self.frame_size_in
-
-        # helper variables for indexing planar-formats
-        # (start, end), a bit ugly!
-        ys = 0
-        ye = self.width * self.height
-        cbs = ye
-        cbe = cbs + ye / 4
-        cbee = cbs + ye / 2
-        crs = cbe
-        crss = cbee
-        cre = crs + ye / 4
-        cree = crss + ye / 2
-
-        # Instead of using separate read/write function for each supported
-        # format, store start_pos and stride for each format in a dictionary
-        # and use extended indexing to place the data where it belongs.
-        # Works great for packed formats; for planar use normal slicing
-        self.layout = {
-                'UYVY': {  # U0|Y0|V0|Y1
-                    'y_start_pos':  1, 'y_stride'  :   2,
-                    'cb_start_pos': 0, 'cb_stride':    4,
-                    'cr_start_pos': 2, 'cr_stride':    4,
-                    },
-                'YVYU': { # Y0|V0|Y1|U0
-                    'y_start_pos':  0, 'y_stride':     2,
-                    'cb_start_pos': 3, 'cb_stride':    4,
-                    'cr_start_pos': 1, 'cr_stride':    4,
-                    },
-                'YUY2': { # Y0|U0|Y1|V0
-                    'y_start_pos':  0, 'y_stride':     2,
-                    'cb_start_pos': 1, 'cb_stride':    4,
-                    'cr_start_pos': 3, 'cr_stride':    4,
-                    },
-                'YV12': { # Y|U|V
-                    'y_start_pos':  ys,  'y_stride':   ye,
-                    'cb_start_pos': cbs, 'cb_stride':  cbe,
-                    'cr_start_pos': crs, 'cr_stride':  cre,
-                    },
-                'IYUV': { # Y|V|U
-                    'y_start_pos':  ys,  'y_stride':   ye,
-                    'cb_start_pos': crs, 'cb_stride':  cre,
-                    'cr_start_pos': cbs, 'cr_stride':  cbe,
-                    },
-                '422': { # Y|U|V
-                    'y_start_pos':  ys,   'y_stride':   ye,
-                    'cb_start_pos': cbs,  'cb_stride':  cbee,
-                    'cr_start_pos': crss, 'cr_stride':  cree,
-                    }
-                }
-
     def __read_frame(self, fd):
         """
         Use extended indexing to read 1 frame into self.{y, cb, cr}
         """
-        packed = ('UYVY', 'YVYU', 'YUY2')
-
         self.y = array.array('B')
         self.cb = array.array('B')
         self.cr = array.array('B')
@@ -449,45 +511,21 @@ class YCbCr:
         self.raw = array.array('B')
         self.raw.fromfile(fd, self.frame_size_in)
 
-        if self.yuv_format_in in packed:
-            self.y  = self.raw[self.layout[self.yuv_format_in]['y_start_pos']::
-                               self.layout[self.yuv_format_in]['y_stride']]
-            self.cb = self.raw[self.layout[self.yuv_format_in]['cb_start_pos']::
-                               self.layout[self.yuv_format_in]['cb_stride']]
-            self.cr = self.raw[self.layout[self.yuv_format_in]['cr_start_pos']::
-                               self.layout[self.yuv_format_in]['cb_stride']]
-        else:
-            self.y  = self.raw[self.layout[self.yuv_format_in]['y_start_pos']:
-                               self.layout[self.yuv_format_in]['y_stride']]
-            self.cb = self.raw[self.layout[self.yuv_format_in]['cb_start_pos']:
-                               self.layout[self.yuv_format_in]['cb_stride']]
-            self.cr = self.raw[self.layout[self.yuv_format_in]['cr_start_pos']:
-                               self.layout[self.yuv_format_in]['cr_stride']]
+        self.y = self.raw[self.layout_in[0]]
+        self.cb = self.raw[self.layout_in[1]]
+        self.cr = self.raw[self.layout_in[2]]
 
     def __write_frame(self, fd):
         """
         Use extended indexing to write 1 frame, including re-sampling and
         format conversion
         """
-        packed = ('UYVY', 'YVYU', 'YUY2')
-
         self.__resample()
         data = [0] * self.frame_size_out
 
-        if self.yuv_format_out in packed:
-            data[self.layout[self.yuv_format_out]['y_start_pos']::
-                 self.layout[self.yuv_format_out]['y_stride']] = self.y
-            data[self.layout[self.yuv_format_out]['cb_start_pos']::
-                 self.layout[self.yuv_format_out]['cb_stride']] = self.cb
-            data[self.layout[self.yuv_format_out]['cr_start_pos']::
-                 self.layout[self.yuv_format_out]['cr_stride']] = self.cr
-        else:
-            data[self.layout[self.yuv_format_out]['y_start_pos']:
-                 self.layout[self.yuv_format_out]['y_stride']] = self.y
-            data[self.layout[self.yuv_format_out]['cb_start_pos']:
-                 self.layout[self.yuv_format_out]['cb_stride']] = self.cb
-            data[self.layout[self.yuv_format_out]['cr_start_pos']:
-                 self.layout[self.yuv_format_out]['cr_stride']] = self.cr
+        data[self.layout_out[0]] = self.y
+        data[self.layout_out[1]] = self.cb
+        data[self.layout_out[2]] = self.cr
 
         fd.write(array.array('B', data).tostring())
 
@@ -599,9 +637,9 @@ class YCbCr:
         Conversion to YCbCr color space.
         CCIR 601 formulas from "Digital Pictures by Natravali and Haskell, page 120.
         """
-        y  = self.__clip2UInt8( 0.257 * r + 0.504 * g + 0.098 * b + 16)
+        y = self.__clip2UInt8(0.257 * r + 0.504 * g + 0.098 * b + 16)
         cb = self.__clip2UInt8(-0.148 * r - 0.291 * g + 0.439 * b + 128)
-        cr = self.__clip2UInt8( 0.439 * r - 0.368 * g - 0.071 * b + 128)
+        cr = self.__clip2UInt8(0.439 * r - 0.368 * g - 0.071 * b + 128)
 
         return (y, cb, cr)
 
@@ -612,11 +650,11 @@ class YCbCr:
         Conversion to RGB color space.
         CCIR 601 formulas from "Digital Pictures by Natravali and Haskell, page 120.
         """
-        y =  y - 16
+        y = y - 16
         cb = cb - 128
         cr = cr - 128
 
-        r = self.__clip2UInt8(1.164 * y              + 1.596 * cr)
+        r = self.__clip2UInt8(1.164 * y + 1.596 * cr)
         g = self.__clip2UInt8(1.164 * y - 0.392 * cb - 0.813 * cr)
         b = self.__clip2UInt8(1.164 * y + 2.017 * cb)
 
@@ -683,6 +721,11 @@ def main():
     def __cmd_10to8(arg):
         yuv = YCbCr(**vars(arg))
         yuv.ten2eight()
+
+    def __cmd_test(arg):
+        yuv = YCbCr(**vars(arg))
+        yuv.test()
+
 
     # create the top-level parser
     parser = argparse.ArgumentParser(

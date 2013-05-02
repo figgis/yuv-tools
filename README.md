@@ -22,6 +22,7 @@ Supported operations:
 * PSNR calculations, one value per color-plane
 * get luma-data per frame
 * SSIM calculation on luma
+* convert between 8bpp and 10bpp
 
 
 Usage
@@ -33,6 +34,8 @@ Usage
 	$ ./ycbcr.py split --help
 	$ ./ycbcr.py psnr --help
 	$ ./ycbcr.py ssim --help
+	$ ./ycbcr.py 8to10 --help
+	$ ./ycbcr.py 10to8 --help
 	$ ./plot_diff.py foreman_cif_frame_0.yuv foreman_cif_frame_1.yuv 352 288 YV12
 
 Files

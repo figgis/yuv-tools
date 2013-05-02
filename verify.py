@@ -2,6 +2,7 @@
 
 import unittest
 import hashlib
+import math
 
 from ycbcr import YCbCr
 
@@ -160,6 +161,46 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         ret = get_sha1('test_11.yuv', SIZE_420)
         self.assertEqual(ret, 'c9120ccf583b410b75379c48325dd50ec8d16ce8')
+
+    def test_12(self):
+        """
+        YV12 -> IYUV
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12',
+                  yuv_format_out='IYUV', filename_out='test_12.yuv')
+        a.convert()
+
+        ret = get_sha1('test_12.yuv', SIZE_420)
+
+        self.assertEqual(ret, '385c87ed96b9298be9a410ff041fe4232b27a9aa')
+
+    def test_13(self):
+        """
+        YV12 -> YUY2
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12',
+                  yuv_format_out='YUY2', filename_out='test_13.yuv')
+        a.convert()
+
+        ret = get_sha1('test_13.yuv', SIZE_420)
+
+        self.assertEqual(ret, '410b438c1aedc7e2ee6d68405f411bbfa8131b7a')
+
+    def test_14(self):
+        """
+        psnr - nan
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12', filename_diff='foreman_cif_frame_0.yuv')
+
+        ret = a.psnr().next()
+
+        self.assertTrue(math.isnan(ret[0]))
+        self.assertTrue(math.isnan(ret[1]))
+        self.assertTrue(math.isnan(ret[2]))
+        self.assertTrue(math.isnan(ret[3]))
 
 if __name__ == '__main__':
     unittest.main()
