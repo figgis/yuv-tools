@@ -9,6 +9,7 @@ from ycbcr import YCbCr
 
 SIZE_420 = 152064    # CIF w*h*3/2
 SIZE_422 = 202752    # CIF w*h*2
+OUT = 'slask.yuv'
 
 
 def get_sha1(f, size):
@@ -31,10 +32,10 @@ class TestYCbCrFunctions(unittest.TestCase):
         """
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
                   yuv_format_in='YV12',
-                  yuv_format_out='YV12', filename_out='test_1.yuv')
+                  yuv_format_out='YV12', filename_out=OUT)
         a.convert()
 
-        ret = get_sha1('test_1.yuv', SIZE_420)
+        ret = get_sha1(OUT, SIZE_420)
 
         self.assertEqual(ret, 'c9120ccf583b410b75379c48325dd50ec8d16ce8')
 
@@ -44,10 +45,10 @@ class TestYCbCrFunctions(unittest.TestCase):
         """
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
                   yuv_format_in='YV12',
-                  yuv_format_out='UYVY', filename_out='test_2.yuv')
+                  yuv_format_out='UYVY', filename_out=OUT)
         a.convert()
 
-        ret = get_sha1('test_2.yuv', SIZE_422)
+        ret = get_sha1(OUT, SIZE_422)
 
         self.assertEqual(ret, 'f50fc0500b217256a87c7cd1e867da0c49c51ace')
 
@@ -57,10 +58,10 @@ class TestYCbCrFunctions(unittest.TestCase):
         """
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
                   yuv_format_in='YV12',
-                  yuv_format_out='YVYU', filename_out='test_3.yuv')
+                  yuv_format_out='YVYU', filename_out=OUT)
         a.convert()
 
-        ret = get_sha1('test_3.yuv', SIZE_422)
+        ret = get_sha1(OUT, SIZE_422)
 
         self.assertEqual(ret, '68ac533290a89625b910731c93fbecba89b61870')
 
@@ -88,10 +89,10 @@ class TestYCbCrFunctions(unittest.TestCase):
         """
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
                   yuv_format_in='YV12',
-                  yuv_format_out='422', filename_out='test_5.yuv')
+                  yuv_format_out='422', filename_out=OUT)
         a.convert()
 
-        ret = get_sha1('test_5.yuv', SIZE_422)
+        ret = get_sha1(OUT, SIZE_422)
 
         self.assertEqual(ret, 'c700a31a209df30b72c1097898740d4c42d63a42')
 
@@ -156,10 +157,10 @@ class TestYCbCrFunctions(unittest.TestCase):
         """
         10bpp -> 8bpp
         """
-        a = YCbCr(filename='test_10.yuv', filename_out='test_11.yuv')
+        a = YCbCr(filename='test_10.yuv', filename_out=OUT)
         a.ten2eight()
 
-        ret = get_sha1('test_11.yuv', SIZE_420)
+        ret = get_sha1(OUT, SIZE_420)
         self.assertEqual(ret, 'c9120ccf583b410b75379c48325dd50ec8d16ce8')
 
     def test_12(self):
@@ -168,10 +169,10 @@ class TestYCbCrFunctions(unittest.TestCase):
         """
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
                   yuv_format_in='YV12',
-                  yuv_format_out='IYUV', filename_out='test_12.yuv')
+                  yuv_format_out='IYUV', filename_out=OUT)
         a.convert()
 
-        ret = get_sha1('test_12.yuv', SIZE_420)
+        ret = get_sha1(OUT, SIZE_420)
 
         self.assertEqual(ret, '385c87ed96b9298be9a410ff041fe4232b27a9aa')
 
@@ -181,10 +182,10 @@ class TestYCbCrFunctions(unittest.TestCase):
         """
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
                   yuv_format_in='YV12',
-                  yuv_format_out='YUY2', filename_out='test_13.yuv')
+                  yuv_format_out='YUY2', filename_out=OUT)
         a.convert()
 
-        ret = get_sha1('test_13.yuv', SIZE_420)
+        ret = get_sha1(OUT, SIZE_420)
 
         self.assertEqual(ret, '410b438c1aedc7e2ee6d68405f411bbfa8131b7a')
 

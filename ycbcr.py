@@ -7,9 +7,10 @@ Tools for working with YCbCr data.
 import argparse
 import array
 import time
-import math
 import sys
 import os
+
+import numpy as np
 
 
 class Y:
@@ -31,7 +32,7 @@ class Y:
         wh = self.wh
         # start-stop
         #       y  y   cb  cb      cr      cr
-        return (0, wh, wh, wh/2*5, wh/2*5, wh*3)
+        return (0, wh, wh, wh/2*3, wh/2*3, wh*2)
 
 
 class YV12(Y):
@@ -173,7 +174,7 @@ class YCbCr:
         self.yuv_format_in = yuv_format_in
         self.yuv_format_out = yuv_format_out
 
-        self.y = None
+        self.yy = None
         self.cb = None
         self.cr = None
 
@@ -253,22 +254,21 @@ class YCbCr:
         out = os.path.splitext(base1)[0] + '_' + \
             os.path.splitext(base2)[0] + '_diff.yuv'
 
-        chroma = [0x80] * (self.width * self.height / 2)
+        chroma = np.empty(self.width * self.height / 2, dtype=np.uint8)
+        chroma.fill(0x80)
         fd_out = open(out, 'wb')
         with open(self.filename, 'rb') as fd_1, \
                 open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_1)
-                data1 = list(self.y)
+                data1 = self.yy.copy()
                 self.__read_frame(fd_2)
-                data2 = list(self.y)
+                data2 = self.yy.copy()
 
-                D = []
-                for x, y in zip(data1, data2):
-                    D.append(max(0, min(255, (0x80 - abs(x - y)))))
-                fd_out.write(array.array('B', D).tostring())
-                fd_out.write(array.array('B', chroma).tostring())
-
+                data = 0x80 - np.abs(data1 - data2)
+                data = data.astype(np.uint8, copy=False)
+                data.tofile(fd_out)
+                chroma.tofile(fd_out)
                 sys.stdout.write('.')
                 sys.stdout.flush()
         fd_out.close()
@@ -281,29 +281,25 @@ class YCbCr:
 
         http://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
         """
-        def psnr(mse):
-            log10 = math.log10
-            if mse == 0:
-                return float("nan")
-            return 10.0 * log10(float(256 * 256) / float(mse))
+        def mse(a, b):
+            return ((a-b)**2).mean()
 
-        def sum_square_err(data1, data2):
-            return sum((a - b) * (a - b) for a, b in zip(data1, data2))
+        def psnr(a, b):
+            m = mse(a, b)
+            if m == 0:
+                return float("nan")
+
+            return 10 * np.log10(256**2/m)
 
         with open(self.filename, 'rb') as fd_1, \
                 open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_1)
-                y1, cb1, cr1, raw1 = self.__copy_planes()
+                frame1 = self.__copy_planes()
                 self.__read_frame(fd_2)
-                y2, cb2, cr2, raw2 = self.__copy_planes()
+                frame2 = self.__copy_planes()
 
-                frame1 = [y1, cb1, cr1, raw1]
-                frame2 = [y2, cb2, cr2, raw2]
-
-                mse = [sum_square_err(x, y) / float(len(x))
-                       for x, y in zip(frame1, frame2)]
-                yield [psnr(i) for i in mse]
+                yield [psnr(x, y) for x, y in zip(frame1, frame2)]
 
     def ssim(self):
         """
@@ -314,7 +310,6 @@ class YCbCr:
         by antoine.vacavant@udamail.fr
         Usage by kind permission from author.
         """
-        import numpy
         import scipy.ndimage
         from numpy.ma.core import exp
         from scipy.constants.constants import pi
@@ -323,7 +318,7 @@ class YCbCr:
             #Variables for Gaussian kernel definition
             gaussian_kernel_sigma = 1.5
             gaussian_kernel_width = 11
-            gaussian_kernel = numpy.zeros((gaussian_kernel_width, gaussian_kernel_width))
+            gaussian_kernel = np.zeros((gaussian_kernel_width, gaussian_kernel_width))
 
             #Fill Gaussian kernel
             for i in range(gaussian_kernel_width):
@@ -333,8 +328,8 @@ class YCbCr:
                         exp(-(((i-5)**2)+((j-5)**2))/(2*(gaussian_kernel_sigma**2)))
 
             #Convert image matrices to double precision (like in the Matlab version)
-            img_mat_1 = img_mat_1.astype(numpy.float)
-            img_mat_2 = img_mat_2.astype(numpy.float)
+            img_mat_1 = img_mat_1.astype(np.float)
+            img_mat_2 = img_mat_2.astype(np.float)
 
             #Squares of input matrices
             img_mat_1_sq = img_mat_1 ** 2
@@ -381,7 +376,7 @@ class YCbCr:
                 (img_mat_sigma_1_sq + img_mat_sigma_2_sq + c_2)
             #SSIM
             ssim_map = num_ssim / den_ssim
-            index = numpy.average(ssim_map)
+            index = np.average(ssim_map)
 
             return index
 
@@ -389,17 +384,19 @@ class YCbCr:
             """
             list 2 numpy, including reshape
             """
-            n = numpy.array(x, dtype=numpy.uint8)
-            return numpy.reshape(n, (h, w))
+            n = np.array(x, dtype=np.uint8)
+            return np.reshape(n, (h, w))
 
         with open(self.filename, 'rb') as fd_1, \
                 open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_1)
-                data1 = list(self.y)
+                data1 = self.yy.copy()
                 self.__read_frame(fd_2)
-                data2 = list(self.y)
+                data2 = self.yy.copy()
 
+                # TODO: no need to convert from list since data
+                # already is a np.array
                 yield compute_ssim(l2n(data1, self.width, self.height),
                                    l2n(data2, self.width, self.height))
 
@@ -415,7 +412,7 @@ class YCbCr:
         with open(fname, 'rb') as fd_in:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_in)
-                yield self.y
+                yield self.yy
 
     def split(self):
         """
@@ -435,25 +432,10 @@ class YCbCr:
         """
         8 bpp -> 10 bpp
         """
-        def bytesfromfile(f):
-            while True:
-                raw = array.array('B')
-                raw.fromstring(f.read(8192))
-                if not raw:
-                    break
-                yield raw
-
-        with open(self.filename, 'rb') as fd_in, \
-                open(self.filename_out, 'wb') as fd_out:
-
-            for byte in bytesfromfile(fd_in):
-                data = []
-                for i in byte:
-                    i <<= 2
-                    data.append(i & 0xff)
-                    data.append((i >> 8) & 0xff)
-
-                fd_out.write(array.array('B', data).tostring())
+        a_in = np.memmap(self.filename, mode='readonly')
+        a_out = np.memmap(self.filename_out, mode='write', shape=2 * len(a_in))
+        a_out[::2] = a_in << 2
+        a_out[1::2] = a_in >> 6
 
     def ten2eight(self):
         """
@@ -476,8 +458,7 @@ class YCbCr:
 
                 data.append(max(0, min(255, val)))
 
-            #fd_out.write(array.array('B', data).tostring())
-            data.tofile(fd_out)
+            fd_out.write(array.array('B', data).tostring())
 
     def __check(self):
         """
@@ -504,14 +485,10 @@ class YCbCr:
         """
         Use extended indexing to read 1 frame into self.{y, cb, cr}
         """
-        self.y = array.array('B')
-        self.cb = array.array('B')
-        self.cr = array.array('B')
+        self.raw = np.fromfile(fd, dtype=np.uint8, count=self.frame_size_in)
+        self.raw = self.raw.astype(np.int, copy=False)
 
-        self.raw = array.array('B')
-        self.raw.fromfile(fd, self.frame_size_in)
-
-        self.y = self.raw[self.layout_in[0]]
+        self.yy = self.raw[self.layout_in[0]]
         self.cb = self.raw[self.layout_in[1]]
         self.cr = self.raw[self.layout_in[2]]
 
@@ -521,13 +498,13 @@ class YCbCr:
         format conversion
         """
         self.__resample()
-        data = [0] * self.frame_size_out
+        data = np.empty(self.frame_size_out, dtype=np.uint8)
 
-        data[self.layout_out[0]] = self.y
+        data[self.layout_out[0]] = self.yy
         data[self.layout_out[1]] = self.cb
         data[self.layout_out[2]] = self.cr
 
-        fd.write(array.array('B', data).tostring())
+        data.tofile(fd)
 
     def __resample(self):
         """
@@ -537,15 +514,15 @@ class YCbCr:
         f422 = ('UYVY', 'YVYU', 'YUY2', '422')
 
         if self.yuv_format_in in f420 and self.yuv_format_out in f422:
-            cb = [0] * (self.width * self.height / 2)
-            cr = [0] * (self.width * self.height / 2)
+            cb = np.zeros(self.width * self.height / 2, dtype=np.int)
+            cr = np.zeros(self.width * self.height / 2, dtype=np.int)
 
             self.cb = self.__conv420to422(self.cb, cb)
             self.cr = self.__conv420to422(self.cr, cr)
 
         if self.yuv_format_in in f422 and self.yuv_format_out in f420:
-            cb = [0] * (self.width * self.height / 4)
-            cr = [0] * (self.width * self.height / 4)
+            cb = np.zeros(self.width * self.height / 4, dtype=np.int)
+            cr = np.zeros(self.width * self.height / 4, dtype=np.int)
 
             self.cb = self.__conv422to420(self.cb, cb)
             self.cr = self.__conv422to420(self.cr, cr)
@@ -676,7 +653,7 @@ class YCbCr:
         Return a copy of the different color planes,
         including whole frame
         """
-        return list(self.y), list(self.cb), list(self.cr), list(self.raw)
+        return self.yy.copy(), self.cb.copy(), self.cr.copy(), self.raw.copy()
 
 
 def main():
