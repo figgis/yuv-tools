@@ -192,17 +192,17 @@ class YCbCr:
 
         # selector
         try:
-            s_in = RW[self.yuv_format_in](self.width, self.height)
-            self.frame_size_in = s_in.get_frame_size()
+            self.s_in = RW[self.yuv_format_in](self.width, self.height)
+            self.frame_size_in = self.s_in.get_frame_size()
             self.num_frames = os.path.getsize(self.filename) / self.frame_size_in
-            self.layout_in = s_in.get_layout()
+            self.layout_in = self.s_in.get_layout()
         except KeyError:
             pass
 
         try:
-            s_out = RW[self.yuv_format_out](self.width, self.height)
-            self.frame_size_out = s_out.get_frame_size()
-            self.layout_out = s_out.get_layout()
+            self.s_out = RW[self.yuv_format_out](self.width, self.height)
+            self.frame_size_out = self.s_out.get_frame_size()
+            self.layout_out = self.s_out.get_layout()
         except KeyError:
             self.frame_size_out = None
 
@@ -424,7 +424,7 @@ class YCbCr:
             data = src_yuv.read(self.frame_size_in)
             fname = "frame" + "%d" % i + ".yuv"
             dst_yuv = open(fname, 'wb')
-            dst_yuv.write(data)           # write read data into new file
+            dst_yuv.write(data)
             dst_yuv.close()
         src_yuv.close()
 
@@ -441,24 +441,59 @@ class YCbCr:
         """
         10 bpp -> 8 bpp
         """
-        num_bytes = os.path.getsize(self.filename)
+        fd_i = open(self.filename, 'rb')
+        fd_o = open(self.filename_out, 'wb')
 
-        raw = array.array('B')
-        data = array.array('B')
+        while True:
+            chunk = np.fromfile(fd_i, dtype=np.uint8, count=8192)
+            chunk = chunk.astype(np.uint)
+            if not chunk.any():
+                break
+            data = (2 + (chunk[1::2] << 8 | chunk[0::2])) >> 2
 
+            data = data.astype(np.uint8, casting='same_kind')
+            data.tofile(fd_o)
+
+        fd_i.close()
+        fd_o.close()
+
+    def fliplr(self):
+        """
+        Flip left-right
+        TODO: hardcoded to 420 right now
+        """
+        self.layout_out = self.s_in.get_layout()
+        self.frame_size_out = self.frame_size_in
         with open(self.filename, 'rb') as fd_in, \
                 open(self.filename_out, 'wb') as fd_out:
+            for i in xrange(self.num_frames):
+                self.__read_frame(fd_in)
+                x = self.yy.reshape([self.height, self.width])
+                self.yy = np.fliplr(x).reshape(-1)
+                x = self.cb.reshape([self.height/2, self.width/2])
+                self.cb = np.fliplr(x).reshape(-1)
+                x = self.cr.reshape([self.height/2, self.width/2])
+                self.cr = np.fliplr(x).reshape(-1)
+                self.__write_frame(fd_out)
+                sys.stdout.write('.')
+                sys.stdout.flush()
 
-            for i in xrange(0, num_bytes, 2):
-                raw.fromfile(fd_in, 2)
-                x = raw.pop()
-                y = raw.pop()
-                pel = (x << 8) | y
-                val = (pel + 2) >> 2
-
-                data.append(max(0, min(255, val)))
-
-            fd_out.write(array.array('B', data).tostring())
+    def flipud(self):
+        """
+        Flip upside-down
+        """
+        self.layout_out = self.s_in.get_layout()
+        self.frame_size_out = self.frame_size_in
+        with open(self.filename, 'rb') as fd_in, \
+                open(self.filename_out, 'wb') as fd_out:
+            for i in xrange(self.num_frames):
+                self.__read_frame(fd_in)
+                self.yy = np.flipud(self.yy)
+                self.cb = np.flipud(self.cb)
+                self.cr = np.flipud(self.cr)
+                self.__write_frame(fd_out)
+                sys.stdout.write('.')
+                sys.stdout.flush()
 
     def __check(self):
         """
@@ -699,10 +734,13 @@ def main():
         yuv = YCbCr(**vars(arg))
         yuv.ten2eight()
 
-    def __cmd_test(arg):
+    def __cmd_fliplr(arg):
         yuv = YCbCr(**vars(arg))
-        yuv.test()
+        yuv.fliplr()
 
+    def __cmd_flipud(arg):
+        yuv = YCbCr(**vars(arg))
+        yuv.flipud()
 
     # create the top-level parser
     parser = argparse.ArgumentParser(
@@ -795,6 +833,24 @@ def main():
     parser_10to8.add_argument('filename_out', type=str,
                               help='file to write to')
     parser_10to8.set_defaults(func=__cmd_10to8)
+
+    # create parser for the 'fliplr' command
+    parser_fliplr = subparsers.add_parser(
+        'fliplr',
+        help='Flip left-right',
+        parents=[parent_parser])
+    parser_fliplr.add_argument('filename_out', type=str,
+                               help='file to write to')
+    parser_fliplr.set_defaults(func=__cmd_fliplr)
+
+    # create parser for the 'flipud' command
+    parser_flipud = subparsers.add_parser(
+        'flipud',
+        help='Flip upside-down',
+        parents=[parent_parser])
+    parser_flipud.add_argument('filename_out', type=str,
+                               help='file to write to')
+    parser_flipud.set_defaults(func=__cmd_flipud)
 
     # let parse_args() do the job of calling the appropriate function
     # after argument parsing is complete

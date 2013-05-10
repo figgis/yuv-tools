@@ -203,5 +203,31 @@ class TestYCbCrFunctions(unittest.TestCase):
         self.assertTrue(math.isnan(ret[2]))
         self.assertTrue(math.isnan(ret[3]))
 
+    def test_15(self):
+        """
+        YV12 -> flip upside-down
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12',
+                  filename_out=OUT)
+        a.flipud()
+
+        ret = get_sha1(OUT, SIZE_420)
+
+        self.assertEqual(ret, '9052c6e03d7e4b8b2ec5d80aa17e9585b9b2a672')
+
+    def test_16(self):
+        """
+        YV12 -> flip left-right
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12',
+                  filename_out=OUT)
+        a.fliplr()
+
+        ret = get_sha1(OUT, SIZE_420)
+
+        self.assertEqual(ret, 'f93ef579e5f672fd2a5962072509d98382a7d1d3')
+
 if __name__ == '__main__':
     unittest.main()
