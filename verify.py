@@ -229,5 +229,23 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, 'f93ef579e5f672fd2a5962072509d98382a7d1d3')
 
+    def test_17(self):
+        """
+        YV12 -> YVYU -> flip left-right
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12',
+                  yuv_format_out='YVYU', filename_out=OUT)
+        a.convert()
+
+        a = YCbCr(width=352, height=288, filename=OUT,
+                  yuv_format_in='YVYU',
+                  filename_out='test_17.yuv')
+        a.fliplr()
+
+        ret = get_sha1('test_17.yuv', SIZE_422)
+
+        self.assertEqual(ret, 'cc35547eab26d1dd2f4525038217f84ceb0ba9e0')
+
 if __name__ == '__main__':
     unittest.main()

@@ -5,7 +5,6 @@ Tools for working with YCbCr data.
 """
 
 import argparse
-import array
 import time
 import sys
 import os
@@ -39,27 +38,40 @@ class YV12(Y):
     """
     YV12
     """
+    def __init__(self, width, height):
+        Y.__init__(self, width, height)
+
+        self.chroma_div = (2, 2)  # Chroma divisor w.r.t luma-size
+
     def get_frame_size(self):
         return (self.width * self.height * 3 / 2)
 
     def get_layout(self):
         """
         return a tuple of slice-objects
+        Y|U|V
         """
         p = self.get_420_partitioning()
-        return (slice(p[0], p[1]),
-                slice(p[2], p[3]),
-                slice(p[4], p[5]))
+        return (slice(p[0], p[1]),    # start-stop for luma
+                slice(p[2], p[3]),    # start-stop for chroma
+                slice(p[4], p[5]))    # start-stop for chroma
 
 
 class IYUV(Y):
     """
     IYUV
     """
+    def __init__(self, width, height):
+        Y.__init__(self, width, height)
+        self.chroma_div = (2, 2)
+
     def get_frame_size(self):
         return (self.width * self.height * 3 / 2)
 
     def get_layout(self):
+        """
+        Y|V|U
+        """
         p = self.get_420_partitioning()
         return (slice(p[0], p[1]),
                 slice(p[4], p[5]),
@@ -70,10 +82,17 @@ class UYVY(Y):
     """
     UYVY
     """
+    def __init__(self, width, height):
+        Y.__init__(self, width, height)
+        self.chroma_div = (1, 2)
+
     def get_frame_size(self):
         return (self.width * self.height * 2)
 
     def get_layout(self):
+        """
+        U0|Y0|V0|Y1
+        """
         fs = self.get_frame_size()
         return (slice(1, fs, 2),
                 slice(0, fs, 4),
@@ -84,10 +103,17 @@ class YVYU(Y):
     """
     YVYU
     """
+    def __init__(self, width, height):
+        Y.__init__(self, width, height)
+        self.chroma_div = (1, 2)
+
     def get_frame_size(self):
         return (self.width * self.height * 2)
 
     def get_layout(self):
+        """
+        Y0|V0|Y1|U0
+        """
         fs = self.get_frame_size()
         return (slice(0, fs, 2),
                 slice(3, fs, 4),
@@ -98,10 +124,17 @@ class YUY2(Y):
     """
     YUY2
     """
+    def __init__(self, width, height):
+        Y.__init__(self, width, height)
+        self.chroma_div = (1, 2)
+
     def get_frame_size(self):
         return (self.width * self.height * 2)
 
     def get_layout(self):
+        """
+        Y0|U0|Y1|V0
+        """
         fs = self.get_frame_size()
         return (slice(0, fs, 2),
                 slice(1, fs, 4),
@@ -112,28 +145,21 @@ class Y422(Y):
     """
     422
     """
+    def __init__(self, width, height):
+        Y.__init__(self, width, height)
+        self.chroma_div = (1, 2)
+
     def get_frame_size(self):
         return (self.width * self.height * 2)
 
     def get_layout(self):
+        """
+        Y|U|V
+        """
         p = self.get_422_partitioning()
         return (slice(p[0], p[1]),
                 slice(p[2], p[3]),
                 slice(p[4], p[5]))
-
-
-class Y8to10(Y):
-    """
-    8bpp -> 10bpp
-    """
-    pass
-
-
-class Y10to8(Y):
-    """
-    10bpp -> 8bpp
-    """
-    pass
 
 
 class YCbCr:
@@ -161,10 +187,29 @@ class YCbCr:
                  yuv_format_out=None, filename_out=None, filename_diff=None,
                  func=None):
 
-        if yuv_format_in not in ['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2', None]:
-            raise NameError('format not supported! "%s"' % yuv_format_in)
-        if yuv_format_out not in ['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2', '422', None]:
-            raise NameError('format not supported! "%s"' % yuv_format_out)
+        self.supported_420 = [
+            'YV12',
+            'IYUV',
+        ]
+
+        self.supported_422 = [
+            'UYVY',
+            'YVYU',
+            'YUY2',
+            '422',
+        ]
+
+        self.supported_extra = [
+            None,
+        ]
+
+        if yuv_format_in not in self.supported_420 + self.supported_422 + \
+           self.supported_extra:
+            raise NameError('Format not supported! "%s"' % yuv_format_in)
+
+        if yuv_format_out not in self.supported_420 + self.supported_422 + \
+           self.supported_extra:
+            raise NameError('Format not supported! "%s"' % yuv_format_out)
 
         self.filename = filename
         self.filename_out = filename_out
@@ -186,28 +231,28 @@ class YCbCr:
             'YVYU': YVYU,
             'YUY2': YUY2,
             '422': Y422,
-            'e2t': Y8to10,
-            't28': Y10to8,
         }
 
-        # selector
-        try:
-            self.s_in = RW[self.yuv_format_in](self.width, self.height)
-            self.frame_size_in = self.s_in.get_frame_size()
+        # Setup
+        if self.yuv_format_in:  # we need a reader and and a writer just
+                                # to make sure
+            self.reader = RW[self.yuv_format_in](self.width, self.height)
+            self.writer = RW[self.yuv_format_in](self.width, self.height)
+            self.frame_size_in = self.reader.get_frame_size()
+            self.frame_size_out = self.reader.get_frame_size()
             self.num_frames = os.path.getsize(self.filename) / self.frame_size_in
-            self.layout_in = self.s_in.get_layout()
-        except KeyError:
-            pass
+            self.layout_in = self.reader.get_layout()
+            self.layout_out = self.reader.get_layout()
+            self.frame_size_out = self.frame_size_in
+            self.cd = self.reader.chroma_div
 
-        try:
-            self.s_out = RW[self.yuv_format_out](self.width, self.height)
-            self.frame_size_out = self.s_out.get_frame_size()
-            self.layout_out = self.s_out.get_layout()
-        except KeyError:
-            self.frame_size_out = None
+        if self.yuv_format_out:
+            self.writer = RW[self.yuv_format_out](self.width, self.height)
+            self.frame_size_out = self.writer.get_frame_size()
+            self.layout_out = self.writer.get_layout()
 
         # 8bpp -> 10bpp, 10->8 dito; special handling
-        if self.yuv_format_in is not None:
+        if yuv_format_in is not None:
             self.__check()
 
     def show(self):
@@ -282,14 +327,14 @@ class YCbCr:
         http://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
         """
         def mse(a, b):
-            return ((a-b)**2).mean()
+            return ((a - b) ** 2).mean()
 
         def psnr(a, b):
             m = mse(a, b)
             if m == 0:
                 return float("nan")
 
-            return 10 * np.log10(256**2/m)
+            return 10 * np.log10(256 ** 2 / m)
 
         with open(self.filename, 'rb') as fd_1, \
                 open(self.filename_diff, 'rb') as fd_2:
@@ -462,17 +507,16 @@ class YCbCr:
         Flip left-right
         TODO: hardcoded to 420 right now
         """
-        self.layout_out = self.s_in.get_layout()
-        self.frame_size_out = self.frame_size_in
+        d = self.cd
         with open(self.filename, 'rb') as fd_in, \
                 open(self.filename_out, 'wb') as fd_out:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_in)
                 x = self.yy.reshape([self.height, self.width])
                 self.yy = np.fliplr(x).reshape(-1)
-                x = self.cb.reshape([self.height/2, self.width/2])
+                x = self.cb.reshape([self.height / d[1], self.width / d[0]])
                 self.cb = np.fliplr(x).reshape(-1)
-                x = self.cr.reshape([self.height/2, self.width/2])
+                x = self.cr.reshape([self.height / d[1], self.width / d[0]])
                 self.cr = np.fliplr(x).reshape(-1)
                 self.__write_frame(fd_out)
                 sys.stdout.write('.')
@@ -482,8 +526,6 @@ class YCbCr:
         """
         Flip upside-down
         """
-        self.layout_out = self.s_in.get_layout()
-        self.frame_size_out = self.frame_size_in
         with open(self.filename, 'rb') as fd_in, \
                 open(self.filename_out, 'wb') as fd_out:
             for i in xrange(self.num_frames):
@@ -513,7 +555,8 @@ class YCbCr:
             print >> sys.stderr, "[WARNING] - # frames not integer"
 
         if self.filename_diff:
-            if not os.path.getsize(self.filename) == os.path.getsize(self.filename_diff):
+            if not os.path.getsize(self.filename) == \
+               os.path.getsize(self.filename_diff):
                 print >> sys.stderr, "[WARNING] - file-sizes are not equal"
 
     def __read_frame(self, fd):
@@ -545,17 +588,17 @@ class YCbCr:
         """
         Handle 420 -> 422 and 422 -> 420
         """
-        f420 = ('YV12', 'IYUV')
-        f422 = ('UYVY', 'YVYU', 'YUY2', '422')
 
-        if self.yuv_format_in in f420 and self.yuv_format_out in f422:
+        if self.yuv_format_in in self.supported_420 and \
+           self.yuv_format_out in self.supported_422:
             cb = np.zeros(self.width * self.height / 2, dtype=np.int)
             cr = np.zeros(self.width * self.height / 2, dtype=np.int)
 
             self.cb = self.__conv420to422(self.cb, cb)
             self.cr = self.__conv420to422(self.cr, cr)
 
-        if self.yuv_format_in in f422 and self.yuv_format_out in f420:
+        if self.yuv_format_in in self.supported_422 and \
+           self.yuv_format_out in self.supported_420:
             cb = np.zeros(self.width * self.height / 4, dtype=np.int)
             cr = np.zeros(self.width * self.height / 4, dtype=np.int)
 
