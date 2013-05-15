@@ -162,6 +162,47 @@ class Y422(Y):
                 slice(p[4], p[5]))
 
 
+class Draw:
+    """
+    pass
+    """
+    def __init__(self):
+        self.char = (
+            # 0
+            (0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe),
+            # 1
+            (0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180),
+            # 2
+            (0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x7ffe, 0x7ffe, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7ffe, 0x7ffe),
+            # 3
+            (0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x7ffe, 0x7ffe),
+            # 4
+            (0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6),
+            # 5
+            (0x7ffe, 0x7ffe, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x7ffe, 0x7ffe),
+            # 6
+            (0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe),
+            # 7
+            (0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6),
+            # 8
+            (0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe),
+            # 9
+            (0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6),
+        )
+
+    def show(self, num):
+        if 0 < num > 9:
+            return
+
+        for c in self.char[num]:
+            for i in range(15, -1, -1):
+                if c & (1 << i):
+                    sys.stdout.write("X")
+                else:
+                    sys.stdout.write(" ")
+            print
+
+
 class YCbCr:
     """
     Tools to work with raw video in YCbCr format.
@@ -537,6 +578,21 @@ class YCbCr:
                 sys.stdout.write('.')
                 sys.stdout.flush()
 
+    def draw_frame_number(self):
+        """
+        Draw frame-number in Luma-data
+        """
+        drawer = Draw()
+        with open(self.filename, 'rb') as fd_in, \
+                open(self.filename_out, 'wb') as fd_out:
+            for i in xrange(self.num_frames):
+                self.__read_frame(fd_in)
+                self.__add_frame_number(i, drawer)
+                self.__write_frame(fd_out)
+                sys.stdout.write('.')
+                sys.stdout.flush()
+
+
     def __check(self):
         """
         Basic consistency checks to prevent fumbly-fingers
@@ -733,6 +789,24 @@ class YCbCr:
         """
         return self.yy.copy(), self.cb.copy(), self.cr.copy(), self.raw.copy()
 
+    def __add_frame_number(self, frame, D):
+        """
+        Draw frame-number in Luma-data
+        """
+        self.yy = np.reshape(self.yy, (self.height, self.width))
+        num_digits = map(int, str(frame))
+
+        for pos, nd in enumerate(num_digits):
+
+            digit = D.char[nd]
+
+            for row, d in enumerate(digit):
+                for i in range(15, -1, -1):
+                    if d & (1 << i):
+                        self.yy[row][pos*16:pos*16+16][15-i] = 16
+
+        self.yy = self.yy.reshape(-1)
+
 
 def main():
     # Helper functions
@@ -784,6 +858,10 @@ def main():
     def __cmd_flipud(arg):
         yuv = YCbCr(**vars(arg))
         yuv.flipud()
+
+    def __cmd_fnum(arg):
+        yuv = YCbCr(**vars(arg))
+        yuv.draw_frame_number()
 
     # create the top-level parser
     parser = argparse.ArgumentParser(
@@ -894,6 +972,15 @@ def main():
     parser_flipud.add_argument('filename_out', type=str,
                                help='file to write to')
     parser_flipud.set_defaults(func=__cmd_flipud)
+
+    # create parser for the 'fnum' command
+    parser_fnum = subparsers.add_parser(
+        'fnum',
+        help='Add Frame number',
+        parents=[parent_parser])
+    parser_fnum.add_argument('filename_out', type=str,
+                               help='file to write to')
+    parser_fnum.set_defaults(func=__cmd_fnum)
 
     # let parse_args() do the job of calling the appropriate function
     # after argument parsing is complete

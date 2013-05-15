@@ -24,7 +24,7 @@ Supported operations:
 * SSIM calculation on luma
 * convert between 8bpp and 10bpp
 * flip left/right, upside/down
-
+* draw frame number in luma-data
 
 Usage
 -----
@@ -39,6 +39,7 @@ Usage
 	$ ./ycbcr.py 10to8 --help
 	$ ./ycbcr.py fliplr --help
 	$ ./ycbcr.py flipud --help
+	$ ./ycbcr.py fnum --help
 	$ ./plot_diff.py foreman_cif_frame_0.yuv foreman_cif_frame_1.yuv 352 288 YV12
 
 Files

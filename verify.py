@@ -247,5 +247,18 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, 'cc35547eab26d1dd2f4525038217f84ceb0ba9e0')
 
+    def test_18(self):
+        """
+        Drawing primitive
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12',
+                  filename_out=OUT)
+        a.draw_frame_number()
+
+        ret = get_sha1(OUT, SIZE_420)
+
+        self.assertEqual(ret, '71490f0356d3ba8d2c3d6110b77a9f665b561324')
+
 if __name__ == '__main__':
     unittest.main()
