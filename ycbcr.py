@@ -21,14 +21,20 @@ class Y:
         self.height = height
         self.wh = self.width * self.height
 
-    def get_420_partitioning(self):
-        wh = self.wh
+    def get_420_partitioning(self, width=None, height=None):
+        if not width:
+            wh = self.wh
+        else:
+            wh = width * height
         # start-stop
         #       y  y   cb  cb      cr      cr
         return (0, wh, wh, wh/4*5, wh/4*5, wh/2*3)
 
-    def get_422_partitioning(self):
-        wh = self.wh
+    def get_422_partitioning(self, width=None, height=None):
+        if not width:
+            wh = self.wh
+        else:
+            wh = width * height
         # start-stop
         #       y  y   cb  cb      cr      cr
         return (0, wh, wh, wh/2*3, wh/2*3, wh*2)
@@ -41,17 +47,21 @@ class YV12(Y):
     def __init__(self, width, height):
         Y.__init__(self, width, height)
 
+        # width, height
         self.chroma_div = (2, 2)  # Chroma divisor w.r.t luma-size
 
-    def get_frame_size(self):
-        return (self.width * self.height * 3 / 2)
+    def get_frame_size(self, width=None, height=None):
+        if not width:
+            width = self.width
+            height = self.height
+        return (width * height * 3 / 2)
 
-    def get_layout(self):
+    def get_layout(self, width=None, height=None):
         """
         return a tuple of slice-objects
         Y|U|V
         """
-        p = self.get_420_partitioning()
+        p = self.get_420_partitioning(width, height)
         return (slice(p[0], p[1]),    # start-stop for luma
                 slice(p[2], p[3]),    # start-stop for chroma
                 slice(p[4], p[5]))    # start-stop for chroma
@@ -65,14 +75,17 @@ class IYUV(Y):
         Y.__init__(self, width, height)
         self.chroma_div = (2, 2)
 
-    def get_frame_size(self):
-        return (self.width * self.height * 3 / 2)
+    def get_frame_size(self, width=None, height=None):
+        if not width:
+            width = self.width
+            height = self.height
+        return (width * height * 3 / 2)
 
-    def get_layout(self):
+    def get_layout(self, width=None, height=None):
         """
         Y|V|U
         """
-        p = self.get_420_partitioning()
+        p = self.get_420_partitioning(width, height)
         return (slice(p[0], p[1]),
                 slice(p[4], p[5]),
                 slice(p[2], p[3]))
@@ -84,16 +97,19 @@ class UYVY(Y):
     """
     def __init__(self, width, height):
         Y.__init__(self, width, height)
-        self.chroma_div = (1, 2)
+        self.chroma_div = (2, 1)
 
-    def get_frame_size(self):
-        return (self.width * self.height * 2)
+    def get_frame_size(self, width=None, height=None):
+        if not width:
+            width = self.width
+            height = self.height
+        return (width * height * 2)
 
-    def get_layout(self):
+    def get_layout(self, width=None, height=None):
         """
         U0|Y0|V0|Y1
         """
-        fs = self.get_frame_size()
+        fs = self.get_frame_size(width, height)
         return (slice(1, fs, 2),
                 slice(0, fs, 4),
                 slice(2, fs, 4))
@@ -105,16 +121,19 @@ class YVYU(Y):
     """
     def __init__(self, width, height):
         Y.__init__(self, width, height)
-        self.chroma_div = (1, 2)
+        self.chroma_div = (2, 1)
 
-    def get_frame_size(self):
-        return (self.width * self.height * 2)
+    def get_frame_size(self, width=None, height=None):
+        if not width:
+            width = self.width
+            height = self.height
+        return (width * height * 2)
 
-    def get_layout(self):
+    def get_layout(self, width=None, height=None):
         """
         Y0|V0|Y1|U0
         """
-        fs = self.get_frame_size()
+        fs = self.get_frame_size(width, height)
         return (slice(0, fs, 2),
                 slice(3, fs, 4),
                 slice(1, fs, 4))
@@ -126,16 +145,19 @@ class YUY2(Y):
     """
     def __init__(self, width, height):
         Y.__init__(self, width, height)
-        self.chroma_div = (1, 2)
+        self.chroma_div = (2, 1)
 
-    def get_frame_size(self):
-        return (self.width * self.height * 2)
+    def get_frame_size(self, width=None, height=None):
+        if not width:
+            width = self.width
+            height = self.height
+        return (width * height * 2)
 
-    def get_layout(self):
+    def get_layout(self, width=None, height=None):
         """
         Y0|U0|Y1|V0
         """
-        fs = self.get_frame_size()
+        fs = self.get_frame_size(width, height)
         return (slice(0, fs, 2),
                 slice(1, fs, 4),
                 slice(3, fs, 4))
@@ -147,47 +169,40 @@ class Y422(Y):
     """
     def __init__(self, width, height):
         Y.__init__(self, width, height)
-        self.chroma_div = (1, 2)
+        self.chroma_div = (2, 1)
 
-    def get_frame_size(self):
-        return (self.width * self.height * 2)
+    def get_frame_size(self, width=None, height=None):
+        if not width:
+            width = self.width
+            height = self.height
+        return (width * height * 2)
 
-    def get_layout(self):
+    def get_layout(self, width=None, height=None):
         """
         Y|U|V
         """
-        p = self.get_422_partitioning()
+        p = self.get_422_partitioning(width, height)
         return (slice(p[0], p[1]),
                 slice(p[2], p[3]),
                 slice(p[4], p[5]))
 
 
-class Draw:
+class Font:
     """
     pass
     """
     def __init__(self):
         self.char = (
-            # 0
-            (0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe),
-            # 1
-            (0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180, 0x180),
-            # 2
-            (0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x7ffe, 0x7ffe, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7ffe, 0x7ffe),
-            # 3
-            (0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x7ffe, 0x7ffe),
-            # 4
-            (0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6),
-            # 5
-            (0x7ffe, 0x7ffe, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x7ffe, 0x7ffe),
-            # 6
-            (0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe),
-            # 7
-            (0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6),
-            # 8
-            (0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe),
-            # 9
-            (0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6),
+            (0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe),  # 0
+            (0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x1800, 0x0180),  # 1
+            (0x7ffe, 0x7ffe, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x7ffe, 0x7ffe, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7ffe, 0x7ffe),  # 2
+            (0x7ffe, 0x7ffe, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x7ffe, 0x7ffe, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x7ffe, 0x7ffe),  # 3
+            (0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006),  # 4
+            (0x7ffe, 0x7ffe, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7ffe, 0x7ffe, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x7ffe, 0x7ffe),  # 5
+            (0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe),  # 6
+            (0x7ffe, 0x7ffe, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006),  # 7
+            (0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe),  # 8
+            (0x7ffe, 0x7ffe, 0x6006, 0x6006, 0x6006, 0x6006, 0x6006, 0x7ffe, 0x7ffe, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006, 0x0006),  # 9
         )
 
     def show(self, num):
@@ -226,7 +241,7 @@ class YCbCr:
     """
     def __init__(self, width=0, height=0, filename=None, yuv_format_in=None,
                  yuv_format_out=None, filename_out=None, filename_diff=None,
-                 func=None):
+                 crop_rect=None, func=None):
 
         self.supported_420 = [
             'YV12',
@@ -259,6 +274,12 @@ class YCbCr:
         self.height = height
         self.yuv_format_in = yuv_format_in
         self.yuv_format_out = yuv_format_out
+        # a, b, c, d
+        # a - x start
+        # b - y start
+        # c - x stop
+        # d - y stop
+        self.crop_rect = crop_rect
 
         self.yy = None
         self.cb = None
@@ -319,16 +340,7 @@ class YCbCr:
         4:2:0 to 4:2:2 interpolation and 4:2:2 to 4:2:0
         subsampling when necessary.
         """
-        with open(self.filename, 'rb') as fd_in, \
-                open(self.filename_out, 'wb') as fd_out:
-            for i in xrange(self.num_frames):
-                # 1. read one frame, result in self.{y, cb, cr}
-                self.__read_frame(fd_in)
-                # 2. converts one frame self.{y,cb, cr} to correct format and
-                #    write it to file
-                self.__write_frame(fd_out)
-                sys.stdout.write('.')
-                sys.stdout.flush()
+        self.__execute()
 
     def diff(self):
         """
@@ -466,13 +478,6 @@ class YCbCr:
 
             return index
 
-        def l2n(x, w, h):
-            """
-            list 2 numpy, including reshape
-            """
-            n = np.array(x, dtype=np.uint8)
-            return np.reshape(n, (h, w))
-
         with open(self.filename, 'rb') as fd_1, \
                 open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
@@ -481,10 +486,8 @@ class YCbCr:
                 self.__read_frame(fd_2)
                 data2 = self.yy.copy()
 
-                # TODO: no need to convert from list since data
-                # already is a np.array
-                yield compute_ssim(l2n(data1, self.width, self.height),
-                                   l2n(data2, self.width, self.height))
+                yield compute_ssim(np.reshape(data1, (self.height, self.width)),
+                                   np.reshape(data2, (self.height, self.width)))
 
     def get_luma(self, alt_fname=False):
         """
@@ -546,7 +549,6 @@ class YCbCr:
     def fliplr(self):
         """
         Flip left-right
-        TODO: hardcoded to 420 right now
         """
         d = self.cd
         with open(self.filename, 'rb') as fd_in, \
@@ -582,16 +584,34 @@ class YCbCr:
         """
         Draw frame-number in Luma-data
         """
-        drawer = Draw()
+        drawer = Font()
+        self.__execute(self.__add_frame_number, drawer)
+
+    def crop(self):
+        """
+        Crop
+        """
+        c = self.crop_rect
+        w = c[2] - c[0] + 1
+        h = c[3] - c[1] + 1
+        # re-calculate output-layout
+        self.frame_size_out = self.reader.get_frame_size(w, h)
+        self.layout_out = self.reader.get_layout(w, h)
+
+        self.__execute(self.__crop)
+
+    def __execute(self, func=lambda *a, **k: None, *args, **kwargs):
+        """
+        Wrapper around read/write frame
+        """
         with open(self.filename, 'rb') as fd_in, \
                 open(self.filename_out, 'wb') as fd_out:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_in)
-                self.__add_frame_number(i, drawer)
+                func(i, *args, **kwargs)
                 self.__write_frame(fd_out)
                 sys.stdout.write('.')
                 sys.stdout.flush()
-
 
     def __check(self):
         """
@@ -709,7 +729,7 @@ class YCbCr:
         http://www.mpeg.org/MPEG/video/mssg-free-mpeg-software.html
         although reference implementation reads data out-of-bounds,
         jp6 is the offending parameter. linking with electric-fence
-        core-dumps. Bit-excact after change.
+        core-dumps. Bit-exact after change.
         """
         w = self.width >> 1
         h = self.height
@@ -807,6 +827,49 @@ class YCbCr:
 
         self.yy = self.yy.reshape(-1)
 
+    def __crop(self, arg):
+        """
+        Crop color-planes
+        Layout for 4:2:0
+        X - Luma sample
+        O - Co-located chroma sample
+            i.e. 1 chroma for 4 Luma
+
+        X     X     X     X
+           O           O
+        X     X     X     X
+        X     X     X     X
+           O           O
+        X     X     X     X
+
+        Layout for 4:2:2
+
+        X     X     X     X
+        O           O
+        X     X     X     X
+        O           O
+        X     X     X     X
+        O           O
+        X     X     X     X
+        O           O
+        """
+        d = self.cd    # divisor
+
+        self.yy = np.reshape(self.yy, (self.height, self.width))
+        self.yy = self.yy[self.crop_rect[0]:self.crop_rect[2]+1,
+                          self.crop_rect[1]:self.crop_rect[3]+1]
+
+        self.yy = self.yy.reshape(-1)
+
+        self.cb = self.cb.reshape([self.height / d[1], self.width / d[0]])
+        self.cb = self.cb[self.crop_rect[1] / d[1]:self.crop_rect[3] / d[1]+1,
+                          self.crop_rect[0] / d[0]:self.crop_rect[2] / d[0]+1]
+        self.cb = self.cb.reshape(-1)
+
+        self.cr = self.cr.reshape([self.height / d[1], self.width / d[0]])
+        self.cr = self.cr[self.crop_rect[1] / d[1]:self.crop_rect[3] / d[1]+1,
+                          self.crop_rect[0] / d[0]:self.crop_rect[2] / d[0]+1]
+        self.cr = self.cr.reshape(-1)
 
 def main():
     # Helper functions
@@ -862,6 +925,21 @@ def main():
     def __cmd_fnum(arg):
         yuv = YCbCr(**vars(arg))
         yuv.draw_frame_number()
+
+    def __cmd_crop(arg):
+        yuv = YCbCr(**vars(arg))
+        yuv.crop()
+
+    def coords(s):
+        """
+        rect must be positive
+        TODO: add arg-check
+        """
+        try:
+            x, y, z, q = map(int, s.split(','))
+            return x, y, z, q
+        except:
+            raise argparse.ArgumentTypeError("Coordinates must be x,y,z,q")
 
     # create the top-level parser
     parser = argparse.ArgumentParser(
@@ -981,6 +1059,21 @@ def main():
     parser_fnum.add_argument('filename_out', type=str,
                                help='file to write to')
     parser_fnum.set_defaults(func=__cmd_fnum)
+
+    # create parser for the 'crop' command
+    parser_crop = subparsers.add_parser(
+        'crop',
+        help='Crop',
+        parents=[parent_parser])
+    parser_crop.add_argument('filename_out', type=str,
+                               help='file to write to')
+    parser_crop.add_argument('crop_rect', type=coords,
+                             help='crop vector: \
+                             x_start, y_start, x_end, y_end. \
+                             Top-left corner has coordinates (0,0). \
+                             1st MB: 0,0,15,15 \
+                             2nd MB: 16,0,31,15')
+    parser_crop.set_defaults(func=__cmd_crop)
 
     # let parse_args() do the job of calling the appropriate function
     # after argument parsing is complete

@@ -245,7 +245,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         ret = get_sha1('test_17.yuv', SIZE_422)
 
-        self.assertEqual(ret, 'cc35547eab26d1dd2f4525038217f84ceb0ba9e0')
+        self.assertEqual(ret, 'a5bdbfdeb0259f6d0bd85ddd97d58f6fc7965ca9')
 
     def test_18(self):
         """
@@ -260,5 +260,37 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, '71490f0356d3ba8d2c3d6110b77a9f665b561324')
 
+    def test_19(self):
+        """
+        YV12 -> crop
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12',
+                  crop_rect=(0,0,15,15),
+                  filename_out=OUT)
+        a.crop()
+
+        ret = get_sha1(OUT, 384)
+
+        self.assertEqual(ret, 'e74e61a5c6ade64c9f6371920512b5010d23cad4')
+
+    def test_20(self):
+        """
+        YV12 -> YVYU -> crop
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12',
+                  yuv_format_out='YVYU', filename_out=OUT)
+        a.convert()
+
+        a = YCbCr(width=352, height=288, filename=OUT,
+                  yuv_format_in='YVYU',
+                  crop_rect=(0,0,15,15),
+                  filename_out='test_20.yuv')
+        a.crop()
+
+        ret = get_sha1('test_20.yuv', 512)
+
+        self.assertEqual(ret, '4bf3179e43e7ca6d490bf1d996dff84ef64be664')
 if __name__ == '__main__':
     unittest.main()

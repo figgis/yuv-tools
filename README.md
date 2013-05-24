@@ -25,6 +25,7 @@ Supported operations:
 * convert between 8bpp and 10bpp
 * flip left/right, upside/down
 * draw frame number in luma-data
+* crop
 
 Usage
 -----
@@ -40,6 +41,7 @@ Usage
 	$ ./ycbcr.py fliplr --help
 	$ ./ycbcr.py flipud --help
 	$ ./ycbcr.py fnum --help
+	$ ./ycbcr.py crop --help
 	$ ./plot_diff.py foreman_cif_frame_0.yuv foreman_cif_frame_1.yuv 352 288 YV12
 
 Files
