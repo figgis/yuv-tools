@@ -9,6 +9,8 @@ import time
 import sys
 import os
 
+from collections import namedtuple
+
 import numpy as np
 
 
@@ -20,6 +22,7 @@ class Y:
         self.width = width
         self.height = height
         self.wh = self.width * self.height
+        self.div = namedtuple('chroma_div', 'width height')
 
     def get_420_partitioning(self, width=None, height=None):
         if not width:
@@ -48,7 +51,7 @@ class YV12(Y):
         Y.__init__(self, width, height)
 
         # width, height
-        self.chroma_div = (2, 2)  # Chroma divisor w.r.t luma-size
+        self.chroma_div = self.div(2, 2)  # Chroma divisor w.r.t luma-size
 
     def get_frame_size(self, width=None, height=None):
         if not width:
@@ -73,7 +76,7 @@ class IYUV(Y):
     """
     def __init__(self, width, height):
         Y.__init__(self, width, height)
-        self.chroma_div = (2, 2)
+        self.chroma_div = self.div(2, 2)
 
     def get_frame_size(self, width=None, height=None):
         if not width:
@@ -97,7 +100,7 @@ class UYVY(Y):
     """
     def __init__(self, width, height):
         Y.__init__(self, width, height)
-        self.chroma_div = (2, 1)
+        self.chroma_div = self.div(2, 1)
 
     def get_frame_size(self, width=None, height=None):
         if not width:
@@ -121,7 +124,7 @@ class YVYU(Y):
     """
     def __init__(self, width, height):
         Y.__init__(self, width, height)
-        self.chroma_div = (2, 1)
+        self.chroma_div = self.div(2, 1)
 
     def get_frame_size(self, width=None, height=None):
         if not width:
@@ -145,7 +148,7 @@ class YUY2(Y):
     """
     def __init__(self, width, height):
         Y.__init__(self, width, height)
-        self.chroma_div = (2, 1)
+        self.chroma_div = self.div(2, 1)
 
     def get_frame_size(self, width=None, height=None):
         if not width:
@@ -169,7 +172,7 @@ class Y422(Y):
     """
     def __init__(self, width, height):
         Y.__init__(self, width, height)
-        self.chroma_div = (2, 1)
+        self.chroma_div = self.div(2, 1)
 
     def get_frame_size(self, width=None, height=None):
         if not width:
@@ -239,9 +242,18 @@ class YCbCr:
         http://www.libsdl.org/
         http://www.libsdl.org/docs/html/sdloverlay.html
     """
-    def __init__(self, width=0, height=0, filename=None, yuv_format_in=None,
-                 yuv_format_out=None, filename_out=None, filename_diff=None,
-                 crop_rect=None, func=None):
+    def __init__(
+        self,
+        width=0,
+        height=0,
+        filename=None,
+        yuv_format_in=None,
+        yuv_format_out=None,
+        filename_out=None,
+        filename_diff=None,
+        crop_rect=None,
+        num=None,
+        func=None):
 
         self.supported_420 = [
             'YV12',
@@ -274,12 +286,10 @@ class YCbCr:
         self.height = height
         self.yuv_format_in = yuv_format_in
         self.yuv_format_out = yuv_format_out
-        # a, b, c, d
-        # a - x start
-        # b - y start
-        # c - x stop
-        # d - y stop
-        self.crop_rect = crop_rect
+
+        if crop_rect:
+            rect = namedtuple('rect', 'xs ys xe ye')
+            self.crop_rect = rect(*crop_rect)
 
         self.yy = None
         self.cb = None
@@ -306,7 +316,7 @@ class YCbCr:
             self.layout_in = self.reader.get_layout()
             self.layout_out = self.reader.get_layout()
             self.frame_size_out = self.frame_size_in
-            self.cd = self.reader.chroma_div
+            self.chroma_div = self.reader.chroma_div
 
         if self.yuv_format_out:
             self.writer = RW[self.yuv_format_out](self.width, self.height)
@@ -316,6 +326,11 @@ class YCbCr:
         # 8bpp -> 10bpp, 10->8 dito; special handling
         if yuv_format_in is not None:
             self.__check()
+
+        # How many frames to process
+        if num:
+            if num <= self.num_frames:
+                self.num_frames = num
 
     def show(self):
         """
@@ -329,7 +344,7 @@ class YCbCr:
         print "Width:", self.width
         print "Height:", self.height
         print "Filesize (bytes):", os.stat(self.filename)[6]
-        print "Num frames:", self.num_frames
+        print "Num frames:", os.path.getsize(self.filename) / self.frame_size_in
         print "Size of 1 frame (in) (bytes):", self.frame_size_in
         print "Size of 1 frame (out) (bytes):", self.frame_size_out
         print
@@ -379,15 +394,12 @@ class YCbCr:
 
         http://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
         """
-        def mse(a, b):
-            return ((a - b) ** 2).mean()
-
         def psnr(a, b):
-            m = mse(a, b)
+            m = ((a - b) ** 2).mean()
             if m == 0:
                 return float("nan")
 
-            return 10 * np.log10(256 ** 2 / m)
+            return 10 * np.log10(255 ** 2 / m)
 
         with open(self.filename, 'rb') as fd_1, \
                 open(self.filename_diff, 'rb') as fd_2:
@@ -514,6 +526,8 @@ class YCbCr:
             fname = "frame" + "%d" % i + ".yuv"
             dst_yuv = open(fname, 'wb')
             dst_yuv.write(data)
+            sys.stdout.write('.')
+            sys.stdout.flush()
             dst_yuv.close()
         src_yuv.close()
 
@@ -550,17 +564,20 @@ class YCbCr:
         """
         Flip left-right
         """
-        d = self.cd
+        d = self.chroma_div
         with open(self.filename, 'rb') as fd_in, \
                 open(self.filename_out, 'wb') as fd_out:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_in)
                 x = self.yy.reshape([self.height, self.width])
                 self.yy = np.fliplr(x).reshape(-1)
-                x = self.cb.reshape([self.height / d[1], self.width / d[0]])
+
+                x = self.cb.reshape([self.height / d.height, self.width / d.width])
                 self.cb = np.fliplr(x).reshape(-1)
-                x = self.cr.reshape([self.height / d[1], self.width / d[0]])
+
+                x = self.cr.reshape([self.height / d.height, self.width / d.width])
                 self.cr = np.fliplr(x).reshape(-1)
+
                 self.__write_frame(fd_out)
                 sys.stdout.write('.')
                 sys.stdout.flush()
@@ -853,22 +870,28 @@ class YCbCr:
         X     X     X     X
         O           O
         """
-        d = self.cd    # divisor
+        d = self.chroma_div    # divisor
+        r = self.crop_rect
 
         self.yy = np.reshape(self.yy, (self.height, self.width))
-        self.yy = self.yy[self.crop_rect[0]:self.crop_rect[2]+1,
-                          self.crop_rect[1]:self.crop_rect[3]+1]
+        self.yy = self.yy[r.ys:r.ye + 1, r.xs:r.xe + 1]
 
         self.yy = self.yy.reshape(-1)
 
-        self.cb = self.cb.reshape([self.height / d[1], self.width / d[0]])
-        self.cb = self.cb[self.crop_rect[1] / d[1]:self.crop_rect[3] / d[1]+1,
-                          self.crop_rect[0] / d[0]:self.crop_rect[2] / d[0]+1]
+        self.cb = self.cb.reshape([self.height / d.height,
+                                   self.width / d.width])
+        self.cb = self.cb[r.ys / d.height:
+                          r.ye / d.height + 1,
+                          r.xs / d.width:
+                          r.xe / d.width + 1]
         self.cb = self.cb.reshape(-1)
 
-        self.cr = self.cr.reshape([self.height / d[1], self.width / d[0]])
-        self.cr = self.cr[self.crop_rect[1] / d[1]:self.crop_rect[3] / d[1]+1,
-                          self.crop_rect[0] / d[0]:self.crop_rect[2] / d[0]+1]
+        self.cr = self.cr.reshape([self.height / d.height,
+                                   self.width / d.width])
+        self.cr = self.cr[r.ys / d.height:
+                          r.ye / d.height + 1,
+                          r.xs / d.width:
+                          r.xe / d.width + 1]
         self.cr = self.cr.reshape(-1)
 
 def main():
@@ -894,8 +917,9 @@ def main():
 
     def __cmd_psnr(arg):
         yuv = YCbCr(**vars(arg))
+        print "{:<5} {:<10} {:<10} {:<10} {:<10}".format('#', 'Y', 'Cb', 'Cr', 'Frame')
         for i, n in enumerate(yuv.psnr()):
-            print i, n
+            print "{:<5} {:<10f} {:<10f} {:<10f} {:<10f}".format(i, *n)
 
     def __cmd_ssim(arg):
         yuv = YCbCr(**vars(arg))
@@ -956,8 +980,13 @@ def main():
     parent_parser.add_argument('height', type=int)
     parent_parser.add_argument(
         'yuv_format_in', type=str,
-        choices=['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2'],
+        choices=['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2', '422'],
         help='valid input-formats')
+    parent_parser.add_argument(
+        '--num',
+        type=int,
+        default=None,
+        help='number of frames to process [0..n-1]')
 
     # create parser for the 'info' command
     parser_info = subparsers.add_parser(
@@ -1057,7 +1086,7 @@ def main():
         help='Add Frame number',
         parents=[parent_parser])
     parser_fnum.add_argument('filename_out', type=str,
-                               help='file to write to')
+                             help='file to write to')
     parser_fnum.set_defaults(func=__cmd_fnum)
 
     # create parser for the 'crop' command
@@ -1066,7 +1095,7 @@ def main():
         help='Crop',
         parents=[parent_parser])
     parser_crop.add_argument('filename_out', type=str,
-                               help='file to write to')
+                             help='file to write to')
     parser_crop.add_argument('crop_rect', type=coords,
                              help='crop vector: \
                              x_start, y_start, x_end, y_end. \

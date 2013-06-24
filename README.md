@@ -26,6 +26,7 @@ Supported operations:
 * flip left/right, upside/down
 * draw frame number in luma-data
 * crop
+* visualization of PSNR/SSIM using matplotlib
 
 Usage
 -----
@@ -43,11 +44,12 @@ Usage
 	$ ./ycbcr.py fnum --help
 	$ ./ycbcr.py crop --help
 	$ ./plot_diff.py foreman_cif_frame_0.yuv foreman_cif_frame_1.yuv 352 288 YV12
-
+        $ ./visual.py psnr_all foreman_cif_frame_0.yuv 352 288 YV12 foreman_cif_frame_1.yuv
 Files
 -----
 
 * ycbcr.py - main class
 * plot_diff.py - matplotlib wrapper around PSNR/SSIM-calculation. Generate nice plots using luma-data.
 * verify.py - unittest
+* visual.py - matplotlib wrapper around PSNR/SSIM-calculation. Generate nice plots.
 

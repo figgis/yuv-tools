@@ -10,6 +10,7 @@ from ycbcr import YCbCr
 SIZE_420 = 152064    # CIF w*h*3/2
 SIZE_422 = 202752    # CIF w*h*2
 OUT = 'slask.yuv'
+OUT1 = 'slask1.yuv'
 
 
 def get_sha1(f, size):
@@ -24,6 +25,9 @@ def get_sha1(f, size):
 class TestYCbCrFunctions(unittest.TestCase):
 
     def setUp(self):
+        pass
+
+    def tearDown(self):
         pass
 
     def test_1(self):
@@ -71,15 +75,15 @@ class TestYCbCrFunctions(unittest.TestCase):
         """
         a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
                   yuv_format_in='YV12',
-                  yuv_format_out='UYVY', filename_out='test_4.yuv')
+                  yuv_format_out='UYVY', filename_out=OUT)
         a.convert()
 
-        b = YCbCr(width=352, height=288, filename='test_4.yuv',
+        b = YCbCr(width=352, height=288, filename=OUT,
                   yuv_format_in='UYVY',
-                  yuv_format_out='YV12', filename_out='test_4_2.yuv')
+                  yuv_format_out='YV12', filename_out=OUT1)
         b.convert()
 
-        ret = get_sha1('test_4_2.yuv', SIZE_422)
+        ret = get_sha1(OUT1, SIZE_422)
 
         self.assertEqual(ret, 'b8934d77e0d71e77e90b4ba777a0cb978679d8ec')
 
@@ -130,7 +134,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         ret = a.psnr().next()
 
-        self.assertEqual(ret, [27.717365657171168, 43.05959038403312, 43.377451819757276, 29.417480696534724])
+        self.assertEqual(ret, [27.68336995961328, 43.025594686475237, 43.343456122199385, 29.383484998976837])
 
     def test_9(self):
         """
@@ -240,10 +244,10 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         a = YCbCr(width=352, height=288, filename=OUT,
                   yuv_format_in='YVYU',
-                  filename_out='test_17.yuv')
+                  filename_out=OUT1)
         a.fliplr()
 
-        ret = get_sha1('test_17.yuv', SIZE_422)
+        ret = get_sha1(OUT1, SIZE_422)
 
         self.assertEqual(ret, 'a5bdbfdeb0259f6d0bd85ddd97d58f6fc7965ca9')
 
@@ -285,12 +289,13 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         a = YCbCr(width=352, height=288, filename=OUT,
                   yuv_format_in='YVYU',
-                  crop_rect=(0,0,15,15),
-                  filename_out='test_20.yuv')
+                  crop_rect=(0, 0, 15, 15),
+                  filename_out=OUT1)
         a.crop()
 
-        ret = get_sha1('test_20.yuv', 512)
+        ret = get_sha1(OUT1, 512)
 
         self.assertEqual(ret, '4bf3179e43e7ca6d490bf1d996dff84ef64be664')
+
 if __name__ == '__main__':
     unittest.main()
