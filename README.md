@@ -44,7 +44,7 @@ Usage
 	$ ./ycbcr.py fnum --help
 	$ ./ycbcr.py crop --help
 	$ ./plot_diff.py foreman_cif_frame_0.yuv foreman_cif_frame_1.yuv 352 288 YV12
-        $ ./visual.py psnr_all foreman_cif_frame_0.yuv 352 288 YV12 foreman_cif_frame_1.yuv
+	$ ./visual.py psnr_all foreman_cif_frame_0.yuv 352 288 YV12 foreman_cif_frame_1.yuv
 Files
 -----
 
