@@ -60,3 +60,5 @@ Here's one of the output from visual.py
 
 ![psnr](figgis.github.com/yuv-tools/figure_1.png)
 
+![psnr](http://figgis.github.io/yuv-tools/figure_1.png)
+
