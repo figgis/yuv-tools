@@ -53,3 +53,10 @@ Files
 * verify.py - unittest
 * visual.py - matplotlib wrapper around PSNR/SSIM-calculation. Generate nice plots.
 
+Screenshots
+-----------
+
+Here's one of the output from visual.py
+
+![psnr](figgis.github.com/yuv-tools/figure_1.png)
+
