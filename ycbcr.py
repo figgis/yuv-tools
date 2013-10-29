@@ -617,6 +617,27 @@ class YCbCr:
 
         self.__execute(self.__crop)
 
+
+    def reduce_framerate(self, fin, fout):
+        """
+        Reduce framerate by throwing frames away
+        input:  filename.yuv
+        output: filename_xx_fps.yuv
+        """
+        fname, fext = os.path.splitext(os.path.basename(self.filename))
+        fname_out = "%s_%d_fps%s" % (fname, fout, fext)
+
+        print "Writing result to", os.getcwd(), fname_out
+
+        with open(self.filename, 'rb') as fd_1, \
+                open(fname_out, 'wb') as fd_2:
+            for i in xrange(self.num_frames):
+                data = fd_1.read(self.frame_size_in)
+                if i%(fin/fout) == 0:
+                    fd_2.write(data)
+                sys.stdout.write('.')
+                sys.stdout.flush()
+
     def __execute(self, func=lambda *a, **k: None, *args, **kwargs):
         """
         Wrapper around read/write frame
@@ -954,6 +975,20 @@ def main():
         yuv = YCbCr(**vars(arg))
         yuv.crop()
 
+    def __cmd_fr(arg):
+        fin = arg.fr_in
+        fout = arg.fr_out
+        del vars(arg)['fr_in']
+        del vars(arg)['fr_out']
+
+        if int(fout) >= int(fin):
+            print >> sys.stderr, "[ERROR] - New framerate must be less than original"
+            return
+
+        yuv = YCbCr(**vars(arg))
+        yuv.show()
+        yuv.reduce_framerate(int(fin), int(fout))
+
     def coords(s):
         """
         rect must be positive
@@ -1103,6 +1138,15 @@ def main():
                              1st MB: 0,0,15,15 \
                              2nd MB: 16,0,31,15')
     parser_crop.set_defaults(func=__cmd_crop)
+
+    # create parser for the 'framerate' command
+    parser_fr = subparsers.add_parser(
+        'fr',
+        help='Descrease framerate by throwing away frames',
+        parents=[parent_parser])
+    parser_fr.add_argument('fr_in', type=int, help='Current framerate')
+    parser_fr.add_argument('fr_out', type=int, help='Target framerate')
+    parser_fr.set_defaults(func=__cmd_fr)
 
     # let parse_args() do the job of calling the appropriate function
     # after argument parsing is complete
