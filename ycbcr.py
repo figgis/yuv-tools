@@ -411,6 +411,23 @@ class YCbCr:
 
                 yield [psnr(x, y) for x, y in zip(frame1, frame2)]
 
+    def wpsnr(self):
+        """
+        Calculate the Weighted sum of the PSNR
+        per picture of the individual components
+        http://iphome.hhi.de/wiegand/assets/pdfs/2012_12_IEEE-HEVC-Performance.pdf
+        p.1676
+        """
+        for i in self.psnr():
+            yield (6 * i[0] + i[1] + i[2]) / 8.0
+
+    def wpsnravg(self):
+        """
+        Return the average of the Weighted sum of the PSNR
+        """
+        a = [i for i in self.wpsnr()]
+        return sum(a)/len(a)
+
     def ssim(self):
         """
         http://en.wikipedia.org/wiki/Structural_similarity
@@ -942,6 +959,15 @@ def main():
         for i, n in enumerate(yuv.psnr()):
             print "{:<5} {:<10f} {:<10f} {:<10f} {:<10f}".format(i, *n)
 
+    def __cmd_wpsnr(arg):
+        yuv = YCbCr(**vars(arg))
+        for i, n in enumerate(yuv.wpsnr()):
+            print "{:<5} {:<10f}".format(i, n)
+
+    def __cmd_wpsnr_avg(arg):
+        yuv = YCbCr(**vars(arg))
+        print yuv.wpsnravg()
+
     def __cmd_ssim(arg):
         yuv = YCbCr(**vars(arg))
         for i, n in enumerate(yuv.ssim()):
@@ -1061,10 +1087,26 @@ def main():
     # create parser for the 'psnr' command
     parser_psnr = subparsers.add_parser(
         'psnr',
-        help='Calculate PSNR for each frame, luma data only',
+        help='Calculate PSNR for each frame and each plane',
         parents=[parent_parser])
     parser_psnr.add_argument('filename_diff', type=str, help='filename')
     parser_psnr.set_defaults(func=__cmd_psnr)
+
+    # create parser for the 'weighted psnr' command
+    parser_wpsnr = subparsers.add_parser(
+        'wpsnr',
+        help='Calculate the weighted sum of the PSNR',
+        parents=[parent_parser])
+    parser_wpsnr.add_argument('filename_diff', type=str, help='filename')
+    parser_wpsnr.set_defaults(func=__cmd_wpsnr)
+
+    # create parser for the 'weighted psnr average' command
+    parser_wpsnr_avg = subparsers.add_parser(
+        'wpsnravg',
+        help='Calculate the average of the weighted sum of the PSNR',
+        parents=[parent_parser])
+    parser_wpsnr_avg.add_argument('filename_diff', type=str, help='filename')
+    parser_wpsnr_avg.set_defaults(func=__cmd_wpsnr_avg)
 
     # create parser for the 'ssim' command
     parser_psnr = subparsers.add_parser(
@@ -1091,7 +1133,7 @@ def main():
 
     # create parser for the '10to8' command
     parser_10to8 = subparsers.add_parser('10to8',
-                                         help='YCbCr 8bpp -> 10bpp')
+                                         help='YCbCr 10bpp -> 8bpp')
     parser_10to8.add_argument('filename', type=str, help='filename')
     parser_10to8.add_argument('filename_out', type=str,
                               help='file to write to')
