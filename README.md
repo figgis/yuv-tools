@@ -20,6 +20,8 @@ Supported operations:
 * split a file into individual frames
 * creates a diff between two files
 * PSNR calculations, one value per color-plane
+* weighted PSNR
+* averaged weighted PSNR
 * get luma-data per frame
 * SSIM calculation on luma
 * convert between 8bpp and 10bpp
@@ -37,6 +39,8 @@ Usage
 	$ ./ycbcr.py diff --help
 	$ ./ycbcr.py split --help
 	$ ./ycbcr.py psnr --help
+	$ ./ycbcr.py wpsnr --help
+	$ ./ycbcr.py wpsnravg --help
 	$ ./ycbcr.py ssim --help
 	$ ./ycbcr.py 8to10 --help
 	$ ./ycbcr.py 10to8 --help
