@@ -425,8 +425,7 @@ class YCbCr:
         """
         Return the average of the Weighted sum of the PSNR
         """
-        a = [i for i in self.wpsnr()]
-        return sum(a)/len(a)
+        return np.average(np.fromiter((i for i in self.wpsnr()), np.float))
 
     def ssim(self):
         """
