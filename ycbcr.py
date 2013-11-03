@@ -94,6 +94,33 @@ class IYUV(Y):
                 slice(p[2], p[3]))
 
 
+class NV12(Y):
+    """
+    NV12
+    """
+    def __init__(self, width, height):
+        Y.__init__(self, width, height)
+
+        # width, height
+        self.chroma_div = self.div(2, 2)  # Chroma divisor w.r.t luma-size
+
+    def get_frame_size(self, width=None, height=None):
+        if not width:
+            width = self.width
+            height = self.height
+        return (width * height * 3 / 2)
+
+    def get_layout(self, width=None, height=None):
+        """
+        return a tuple of slice-objects
+        Y|U0|V0|U1|V1...
+        """
+        p = self.get_420_partitioning(width, height)
+        return (slice(p[0],   p[1]),       # start-stop for luma
+                slice(p[2],   p[5], 2),    # start-stop for chroma
+                slice(p[2]+1, p[5], 2))    # start-stop for chroma
+
+
 class UYVY(Y):
     """
     UYVY
@@ -235,7 +262,7 @@ class YCbCr:
 
     Supports the following YCbCr-formats:
 
-        {IYUV, UYVY, YV12, YVYU, YUY2}
+        {IYUV, UYVY, YV12, NV12, YVYU, YUY2}
 
     Main reason for this is that those are the formats supported by
 
@@ -258,6 +285,7 @@ class YCbCr:
         self.supported_420 = [
             'YV12',
             'IYUV',
+            'NV12',
         ]
 
         self.supported_422 = [
@@ -299,6 +327,7 @@ class YCbCr:
         RW = {
             'YV12': YV12,
             'IYUV': IYUV,
+            'NV12': NV12,
             'UYVY': UYVY,
             'YVYU': YVYU,
             'YUY2': YUY2,
@@ -1041,7 +1070,7 @@ def main():
     parent_parser.add_argument('height', type=int)
     parent_parser.add_argument(
         'yuv_format_in', type=str,
-        choices=['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2', '422'],
+        choices=['IYUV', 'UYVY', 'YV12', 'NV12', 'YVYU', 'YUY2', '422'],
         help='valid input-formats')
     parent_parser.add_argument(
         '--num',
@@ -1070,7 +1099,7 @@ def main():
         parents=[parent_parser])
     parser_convert.add_argument(
         'yuv_format_out', type=str,
-        choices=['IYUV', 'UYVY', 'YV12', 'YVYU', '422', 'YUY2'],
+        choices=['IYUV', 'UYVY', 'YV12', 'NV12', 'YVYU', '422', 'YUY2'],
         help='valid output-formats')
     parser_convert.add_argument('filename_out', type=str,
                                 help='file to write to')

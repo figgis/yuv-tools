@@ -297,5 +297,18 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         self.assertEqual(ret, '4bf3179e43e7ca6d490bf1d996dff84ef64be664')
 
+    def test_21(self):
+        """
+        convert YV12 into NV12
+        """
+        a = YCbCr(width=352, height=288, filename='foreman_cif_frame_0.yuv',
+                  yuv_format_in='YV12',
+                  yuv_format_out='NV12', filename_out=OUT)
+        a.convert()
+
+        ret = get_sha1(OUT, SIZE_420)
+
+        self.assertEqual(ret, 'e24ac66dc32cff5dff16297dfaab761ab962143c')
+
 if __name__ == '__main__':
     unittest.main()
