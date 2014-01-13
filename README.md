@@ -9,6 +9,7 @@ ycbcr.py - is the main class that supports the following formats:
 * IYUV
 * UYVY
 * YV12
+* NV12
 * YVYU
 * YUY2
 * 422
