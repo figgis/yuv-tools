@@ -13,31 +13,66 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ycbcr import YCbCr
 
-def create_title_string(arg):
+def create_title_string(title, subtitle):
     """
     Helper function to generate a nice looking
     title string
     """
     return "{} {}\n{}".format(
-        os.path.basename(arg.filename),
+        os.path.basename(title),
         'VS.',
-        os.path.basename(arg.filename_diff))
+        " ".join([os.path.basename(i) for i in subtitle]))
 
 def plot_psnr(arg):
     """
     PSNR
     """
-    yuv = YCbCr(**vars(arg))
+    t, st = vars(arg)['filename'], vars(arg)['filename_diff']
+    for f in st:
+        vars(arg)['filename_diff']=f
+        yuv = YCbCr(**vars(arg))
 
-    psnr = [p[0] for p in yuv.psnr()]
+        psnr = [p[3] for p in yuv.psnr()]
 
-    N = len(psnr)
-    ind = np.arange(N)  # the x locations for the groups
+        N = len(psnr[:-2])
+        ind = np.arange(N)  # the x locations for the groups
 
-    plt.figure()
-    plt.title(create_title_string(arg))
-    plt.plot(ind, psnr, 'ro-')
-    plt.ylabel('dB')
+        # To get a uniq identifier
+        plt.plot(ind, psnr[:-2], 'o-',label=f[-10:-8])
+
+        del yuv
+
+    plt.legend()
+    plt.title(create_title_string(t, st))
+    plt.ylabel('weighted dB')
+    plt.xlabel('frame')
+    plt.grid(True)
+
+    plt.show()
+
+def plot_wpsnr(arg):
+    """
+    Weighted PSNR
+    BD-PSNR
+    """
+    t, st = vars(arg)['filename'], vars(arg)['filename_diff']
+    for f in st:
+        vars(arg)['filename_diff']=f
+        yuv = YCbCr(**vars(arg))
+
+        psnr = [p[0] for p in yuv.psnr()]
+
+        N = len(psnr[:-2])
+        ind = np.arange(N)  # the x locations for the groups
+
+        # To get a uniq identifier
+        plt.plot(ind, psnr[:-2], 'o-',label=f[-8:-4])
+
+        del yuv
+
+    plt.legend()
+    plt.title(create_title_string(t, st))
+    plt.ylabel('weighted dB')
     plt.xlabel('frame')
     plt.grid(True)
 
@@ -71,16 +106,22 @@ def plot_ssim(arg):
     """
     SSIM
     """
-    yuv = YCbCr(**vars(arg))
+    t, st = vars(arg)['filename'], vars(arg)['filename_diff']
+    for f in st:
+        vars(arg)['filename_diff']=f
+        yuv = YCbCr(**vars(arg))
 
-    ssim = [s for s in yuv.ssim()]
+        ssim = [s for s in yuv.ssim()][:-2]
 
-    N = len(ssim)
-    ind = np.arange(N)  # the x locations for the groups
+        N = len(ssim)
+        ind = np.arange(N)
 
-    plt.figure()
-    plt.title(create_title_string(arg))
-    plt.plot(ind, ssim, 'ro-')
+        plt.plot(ind, ssim, 'o-',label=f[-8:-4])
+
+        del yuv
+
+    plt.legend()
+    plt.title(create_title_string(t, st))
     plt.ylabel('Index')
     plt.xlabel('frame')
     plt.grid(True)
@@ -91,7 +132,6 @@ def main():
     """
     pass
     """
-
     # create the top-level parser
     parser = argparse.ArgumentParser(
         description='YCbCr visualization',
@@ -109,7 +149,9 @@ def main():
         'yuv_format_in', type=str,
         choices=['IYUV', 'UYVY', 'YV12', 'YVYU', 'YUY2', '422'],
         help='valid input-formats')
-    parent_parser.add_argument('filename_diff', type=str, help='filename')
+    parent_parser.add_argument(
+            'filename_diff', type=str,
+            help='filename', nargs='+')
     parent_parser.add_argument(
         '--num',
         type=int,
@@ -122,6 +164,13 @@ def main():
         help='Luma PSNR plot',
         parents=[parent_parser])
     parser_psnr.set_defaults(func=plot_psnr)
+
+    # create parser for the 'wpsnr' command
+    parser_wpsnr = subparsers.add_parser(
+        'wpsnr',
+        help='Weighted PSNR plot',
+        parents=[parent_parser])
+    parser_wpsnr.set_defaults(func=plot_wpsnr)
 
     # create parser for the 'psnr_all' command
     parser_psnr_all = subparsers.add_parser(

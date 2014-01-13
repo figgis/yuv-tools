@@ -134,7 +134,7 @@ class TestYCbCrFunctions(unittest.TestCase):
 
         ret = a.psnr().next()
 
-        self.assertEqual(ret, [27.68336995961328, 43.025594686475237, 43.343456122199385, 29.383484998976837])
+        self.assertEqual(ret, [27.68336995961328, 43.025594686475237, 43.343456122199385, 31.558658820794285])
 
     def test_9(self):
         """

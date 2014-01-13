@@ -341,7 +341,15 @@ class YCbCr:
             self.writer = RW[self.yuv_format_in](self.width, self.height)
             self.frame_size_in = self.reader.get_frame_size()
             self.frame_size_out = self.reader.get_frame_size()
-            self.num_frames = os.path.getsize(self.filename) / self.frame_size_in
+
+            # If file-sizes differ, just process the smaller ammount of frames
+            n1 = os.path.getsize(self.filename) / self.frame_size_in
+            n2 = n1
+            if self.filename_diff:
+                n2 = os.path.getsize(self.filename_diff) / self.frame_size_in
+
+            self.num_frames = min(n1, n2)
+
             self.layout_in = self.reader.get_layout()
             self.layout_out = self.reader.get_layout()
             self.frame_size_out = self.frame_size_in
@@ -355,6 +363,7 @@ class YCbCr:
         # 8bpp -> 10bpp, 10->8 dito; special handling
         if yuv_format_in is not None:
             self.__check()
+
 
         # How many frames to process
         if num:
@@ -419,9 +428,13 @@ class YCbCr:
         """
         PSNR calculations.
         Generator gives PSNR for
-        [Y, Cb, Cr, whole frame]
+        [Y, Cb, Cr, BD]
+        Final line is average for above
 
         http://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
+        BD-PSNR
+        http://iphome.hhi.de/wiegand/assets/pdfs/2012_12_IEEE-HEVC-Performance.pdf
+        p.1676
         """
         def psnr(a, b):
             m = ((a - b) ** 2).mean()
@@ -430,31 +443,24 @@ class YCbCr:
 
             return 10 * np.log10(255 ** 2 / m)
 
+        yy = []; cb = []; cr = []; bd = []
         with open(self.filename, 'rb') as fd_1, \
                 open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
                 self.__read_frame(fd_1)
-                frame1 = self.__copy_planes()
+                frame1 = self.__copy_planes()[:-1]    # skip whole frame
                 self.__read_frame(fd_2)
-                frame2 = self.__copy_planes()
+                frame2 = self.__copy_planes()[:-1]    # skip whole frame
 
-                yield [psnr(x, y) for x, y in zip(frame1, frame2)]
+                yy.append(psnr(frame1[0], frame2[0]))
+                cb.append(psnr(frame1[1], frame2[1]))
+                cr.append(psnr(frame1[2], frame2[2]))
+                bd.append((6 * yy[-1] + cb[-1] + cr[-1]) / 8.0)
 
-    def wpsnr(self):
-        """
-        Calculate the Weighted sum of the PSNR
-        per picture of the individual components
-        http://iphome.hhi.de/wiegand/assets/pdfs/2012_12_IEEE-HEVC-Performance.pdf
-        p.1676
-        """
-        for i in self.psnr():
-            yield (6 * i[0] + i[1] + i[2]) / 8.0
+                yield [yy[-1], cb[-1], cr[-1], bd[-1]]
 
-    def wpsnravg(self):
-        """
-        Return the average of the Weighted sum of the PSNR
-        """
-        return np.average(np.fromiter((i for i in self.wpsnr()), np.float))
+            yield ['-', '-', '-', '-', '-']
+            yield [sum(yy)/len(yy), sum(cb)/len(cb), sum(cr)/len(cr), sum(bd)/len(bd)]
 
     def ssim(self):
         """
@@ -535,6 +541,7 @@ class YCbCr:
 
             return index
 
+        s = []
         with open(self.filename, 'rb') as fd_1, \
                 open(self.filename_diff, 'rb') as fd_2:
             for i in xrange(self.num_frames):
@@ -543,8 +550,12 @@ class YCbCr:
                 self.__read_frame(fd_2)
                 data2 = self.yy.copy()
 
-                yield compute_ssim(np.reshape(data1, (self.height, self.width)),
-                                   np.reshape(data2, (self.height, self.width)))
+                s.append(compute_ssim(np.reshape(data1, (self.height, self.width)),
+                                      np.reshape(data2, (self.height, self.width))))
+
+                yield s[-1]
+            yield '--'
+            yield sum(s)/len(s)
 
     def get_luma(self, alt_fname=False):
         """
@@ -714,9 +725,10 @@ class YCbCr:
             print >> sys.stderr, "[WARNING] - # frames not integer"
 
         if self.filename_diff:
-            if not os.path.getsize(self.filename) == \
-               os.path.getsize(self.filename_diff):
+            size_diff = os.path.getsize(self.filename_diff)
+            if not size == size_diff:
                 print >> sys.stderr, "[WARNING] - file-sizes are not equal"
+
 
     def __read_frame(self, fd):
         """
@@ -983,23 +995,26 @@ def main():
 
     def __cmd_psnr(arg):
         yuv = YCbCr(**vars(arg))
-        print "{:<5} {:<10} {:<10} {:<10} {:<10}".format('#', 'Y', 'Cb', 'Cr', 'Frame')
-        for i, n in enumerate(yuv.psnr()):
-            print "{:<5} {:<10f} {:<10f} {:<10f} {:<10f}".format(i, *n)
-
-    def __cmd_wpsnr(arg):
-        yuv = YCbCr(**vars(arg))
-        for i, n in enumerate(yuv.wpsnr()):
-            print "{:<5} {:<10f}".format(i, n)
-
-    def __cmd_wpsnr_avg(arg):
-        yuv = YCbCr(**vars(arg))
-        print yuv.wpsnravg()
+        print "{:<5} {:<10} {:<10} {:<10} {:<10}".format('#', 'Y', 'Cb', 'Cr', 'BD')
+        x = (i for i in yuv.psnr())
+        for i, n in enumerate(x):
+            try:
+                print "{:<5} {:<10f} {:<10f} {:<10f} {:<10f}".format(i, *n)
+            except ValueError:
+                print "----"
+                n = x.next()
+                print "{:<5} {:<10f} {:<10f} {:<10f} {:<10f}".format("avg", *n)
 
     def __cmd_ssim(arg):
         yuv = YCbCr(**vars(arg))
-        for i, n in enumerate(yuv.ssim()):
-            print i, n
+        x = (i for i in yuv.ssim())
+        for i, n in enumerate(x):
+            try:
+                print "{:<5} {:<10f}".format(i, n)
+            except ValueError:
+                print "----"
+                n = x.next()
+                print "{:<5} {:<10f}".format("avg", n)
 
     def __cmd_get_luma(arg):
         yuv = YCbCr(**vars(arg))
@@ -1119,22 +1134,6 @@ def main():
         parents=[parent_parser])
     parser_psnr.add_argument('filename_diff', type=str, help='filename')
     parser_psnr.set_defaults(func=__cmd_psnr)
-
-    # create parser for the 'weighted psnr' command
-    parser_wpsnr = subparsers.add_parser(
-        'wpsnr',
-        help='Calculate the weighted sum of the PSNR',
-        parents=[parent_parser])
-    parser_wpsnr.add_argument('filename_diff', type=str, help='filename')
-    parser_wpsnr.set_defaults(func=__cmd_wpsnr)
-
-    # create parser for the 'weighted psnr average' command
-    parser_wpsnr_avg = subparsers.add_parser(
-        'wpsnravg',
-        help='Calculate the average of the weighted sum of the PSNR',
-        parents=[parent_parser])
-    parser_wpsnr_avg.add_argument('filename_diff', type=str, help='filename')
-    parser_wpsnr_avg.set_defaults(func=__cmd_wpsnr_avg)
 
     # create parser for the 'ssim' command
     parser_psnr = subparsers.add_parser(

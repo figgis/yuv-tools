@@ -20,9 +20,7 @@ Supported operations:
 * convert between any of the formats above (including correct sub- re-sampling of chroma-data)
 * split a file into individual frames
 * creates a diff between two files
-* PSNR calculations, one value per color-plane
-* weighted PSNR
-* averaged weighted PSNR
+* PSNR calculations, one value per color-plane including weighted and average
 * get luma-data per frame
 * SSIM calculation on luma
 * convert between 8bpp and 10bpp
@@ -32,6 +30,9 @@ Supported operations:
 * visualization of PSNR/SSIM using matplotlib
 * reduce framerate by throwing away frames
 
+Also includes a simple GUI using wxpython that wraps
+the psnr/ssim operations above.
+
 Usage
 -----
 
@@ -40,8 +41,6 @@ Usage
 	$ ./ycbcr.py diff --help
 	$ ./ycbcr.py split --help
 	$ ./ycbcr.py psnr --help
-	$ ./ycbcr.py wpsnr --help
-	$ ./ycbcr.py wpsnravg --help
 	$ ./ycbcr.py ssim --help
 	$ ./ycbcr.py 8to10 --help
 	$ ./ycbcr.py 10to8 --help
